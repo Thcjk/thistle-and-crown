@@ -7,11 +7,9 @@ export class CollisionSystem {
 
   isBlocked(from: Vec3, to: Vec3): boolean {
     for (const obstacle of this.map.obstacles) {
-      if (distance2D(to, obstacle.position) < obstacle.radius) {
-        return true;
-      }
-      // Segment vs circle approximation
-      if (this.segmentHitsCircle(from, to, obstacle.position, obstacle.radius * 0.9)) {
+      // Only block if the destination is inside the obstacle.
+      // Tiny movement steps should not get stuck on long segment tests.
+      if (distance2D(to, obstacle.position) < obstacle.radius * 0.85) {
         return true;
       }
     }
@@ -19,6 +17,7 @@ export class CollisionSystem {
     if (Math.abs(to.x) > half || Math.abs(to.z) > half) {
       return true;
     }
+    void from;
     return false;
   }
 
@@ -45,25 +44,5 @@ export class CollisionSystem {
       }
     }
     return { ...from };
-  }
-
-  private segmentHitsCircle(
-    a: Vec3,
-    b: Vec3,
-    center: Vec3,
-    radius: number,
-  ): boolean {
-    const abx = b.x - a.x;
-    const abz = b.z - a.z;
-    const acx = center.x - a.x;
-    const acz = center.z - a.z;
-    const abLenSq = abx * abx + abz * abz;
-    if (abLenSq < 1e-8) return distance2D(a, center) < radius;
-    let t = (acx * abx + acz * abz) / abLenSq;
-    t = Math.max(0, Math.min(1, t));
-    const closest = { x: a.x + abx * t, z: a.z + abz * t };
-    const dx = closest.x - center.x;
-    const dz = closest.z - center.z;
-    return dx * dx + dz * dz <= radius * radius;
   }
 }

@@ -97,6 +97,8 @@ export class MatchManager {
   private pendingAbilitySlot: string | null = null;
   private playerId: string | null = null;
   cameraLocked = true;
+  /** Last issued ground move/attack-move point for UI marker. */
+  moveMarker: { x: number; z: number; life: number } | null = null;
   private floatingDamage: Array<{
     id: string;
     x: number;
@@ -191,7 +193,7 @@ export class MatchManager {
       this.pendingAbilitySlot = null;
     }
 
-    if (input.selectCommand?.hasWorld) {
+    if (input.selectCommand?.hasWorld && !input.moveCommand) {
       const hit = this.pickEntity(input.selectCommand.worldX, input.selectCommand.worldZ);
       this.selectedTargetId = hit?.id ?? null;
       if (hit && this.targeting.areEnemies(player, hit)) {
@@ -201,6 +203,7 @@ export class MatchManager {
 
     if (input.attackMoveConfirm?.hasWorld) {
       this.pendingAbilitySlot = null;
+      player.recalling = false;
       const hit = this.pickEntity(
         input.attackMoveConfirm.worldX,
         input.attackMoveConfirm.worldZ,
@@ -215,12 +218,14 @@ export class MatchManager {
           y: 0,
           z: input.attackMoveConfirm.worldZ,
         });
+        this.setMoveMarker(input.attackMoveConfirm.worldX, input.attackMoveConfirm.worldZ);
       }
     }
 
     if (input.moveCommand?.hasWorld) {
       this.pendingAbilitySlot = null;
       player.recalling = false;
+      // Tight pick only: mid-lane clicks must move to ground, not snap onto nearby minions.
       const hit = this.pickEntity(input.moveCommand.worldX, input.moveCommand.worldZ, true);
       if (hit && this.targeting.areEnemies(player, hit)) {
         player.orderAttack(hit.id);
@@ -231,6 +236,8 @@ export class MatchManager {
           y: 0,
           z: input.moveCommand.worldZ,
         });
+        this.setMoveMarker(input.moveCommand.worldX, input.moveCommand.worldZ);
+        this.selectedTargetId = null;
       }
     }
 
@@ -319,6 +326,14 @@ export class MatchManager {
 
     for (const d of this.floatingDamage) d.life -= dt;
     this.floatingDamage = this.floatingDamage.filter((d) => d.life > 0);
+    if (this.moveMarker) {
+      this.moveMarker.life -= dt;
+      if (this.moveMarker.life <= 0) this.moveMarker = null;
+    }
+  }
+
+  private setMoveMarker(x: number, z: number): void {
+    this.moveMarker = { x, z, life: 1.2 };
   }
 
   private bootstrap(config: MatchConfig): void {
@@ -806,11 +821,13 @@ export class MatchManager {
   private pickEntity(x: number, z: number, enemiesOnly = false): LivingEntity | null {
     const player = this.player;
     let best: LivingEntity | null = null;
-    let bestDist = 2.2;
+    let bestDist = 1.15;
     for (const entity of this.allLiving()) {
       if (enemiesOnly && player && !this.targeting.areEnemies(player, entity)) continue;
+      // Ignore own hero for ground clicks.
+      if (player && entity.id === player.id) continue;
       const d = distance2D({ x, z }, entity.position);
-      const reach = entity.transform.radius + 0.8;
+      const reach = entity.transform.radius + 0.35;
       if (d <= reach && d < bestDist) {
         best = entity;
         bestDist = d;

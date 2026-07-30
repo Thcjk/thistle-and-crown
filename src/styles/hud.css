@@ -309,3 +309,91 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
+
+.help-fab {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(201, 168, 76, 0.45);
+  background: rgba(26, 30, 28, 0.88);
+  color: var(--parchment);
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.help-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(8, 10, 9, 0.62);
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.help-panel {
+  width: min(640px, 94vw);
+  max-height: min(86vh, 720px);
+  overflow: auto;
+  padding: 1.25rem 1.4rem 1.1rem;
+  background: linear-gradient(165deg, rgba(32, 38, 34, 0.97), rgba(18, 22, 20, 0.98));
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--parchment);
+}
+
+.help-panel h2 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  color: var(--gold);
+}
+
+.help-lead {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(243, 239, 228, 0.88);
+}
+
+.help-grid {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.help-panel h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--highland-soft);
+}
+
+.help-panel ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: rgba(243, 239, 228, 0.85);
+}
+
+.help-panel li + li {
+  margin-top: 0.25rem;
+}
+
+.help-panel kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  background: rgba(0, 0, 0, 0.35);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+}
+
+.help-panel .menu-btn {
+  width: 100%;
+}

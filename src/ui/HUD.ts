@@ -18,6 +18,8 @@ export class HUD {
   private healthBars = new HealthBar();
   private showScoreboard = false;
   private showPause = false;
+  private showHelp = false;
+  private helpSeen = false;
   private toastTimer = 0;
   private toastEl: HTMLElement | null = null;
 
@@ -71,13 +73,53 @@ export class HUD {
       <div data-world-bars></div>
       <div data-damage></div>
       <div class="toast hidden" data-toast></div>
-      <div class="control-hint">RMB move · A+LMB attack-move · S stop · Y cam · B recall · QWER skills</div>
+      <div class="control-hint">Klick/RMB bewegen · QWER · H Hilfe · Esc Pause</div>
+      <button class="help-fab interactive" type="button" data-help-open title="Hilfe (H)">?</button>
+      <div class="help-overlay hidden" data-help>
+        <div class="help-panel interactive">
+          <h2>So spielst du</h2>
+          <p class="help-lead">Du steuerst <strong>Brenna Stonehand</strong> (Highland). Zerstöre den gegnerischen <strong>Kern</strong> in der Basis der Iron Crown.</p>
+          <div class="help-grid">
+            <section>
+              <h3>Ziel</h3>
+              <ul>
+                <li>Drei Lanes: Top, Mid, Bot — Minions pushen automatisch.</li>
+                <li>Türme blocken den Weg zum Kern. Erst Türme, dann Kern.</li>
+                <li>Gold &amp; XP durch Last Hits (Minions), Helden und Jungle-Camps.</li>
+              </ul>
+            </section>
+            <section>
+              <h3>Steuerung</h3>
+              <ul>
+                <li><kbd>Linksklick</kbd> / <kbd>Rechtsklick</kbd> — zum Punkt laufen (auf Feind = angreifen)</li>
+                <li><kbd>A</kbd> dann Klick — Attack-Move (laufen &amp; Feinde unterwegs angreifen)</li>
+                <li><kbd>S</kbd> — Stoppen</li>
+                <li><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> — Fähigkeiten (manchmal nochmal klicken zum Zielen)</li>
+                <li><kbd>B</kbd> — Recall (zurück zur Basis)</li>
+                <li><kbd>Y</kbd> — Kamera an Heldin / frei · <kbd>Leertaste</kbd> zentrieren</li>
+                <li>Minimap-Klick — Kamera dorthin · <kbd>Esc</kbd> Pause · <kbd>Tab</kbd> Scoreboard</li>
+              </ul>
+            </section>
+            <section>
+              <h3>Tipps</h3>
+              <ul>
+                <li>Shop unten links: nur in der eigenen Basis kaufen.</li>
+                <li>Gelber Ring am Boden = dein Bewegungsbefehl.</li>
+                <li>Feindliche Basis schadet dir — eigene Basis heilt/schützt kurz nach Spawn.</li>
+                <li>CS = getötete Minions/Monster (Gold).</li>
+              </ul>
+            </section>
+          </div>
+          <button class="menu-btn" type="button" data-help-close>Verstanden — spielen</button>
+        </div>
+      </div>
       <div class="debug-panel hidden" data-debug></div>
       <div class="pause-menu hidden" data-pause>
         <div class="menu-panel">
           <h2 class="menu-brand" style="font-size:1.8rem">Paused</h2>
           <button class="menu-btn" data-resume>Resume</button>
           <button class="menu-btn secondary" data-exit>Exit to Menu</button>
+          <button class="menu-btn secondary" type="button" data-help-from-pause>Hilfe</button>
         </div>
       </div>
     `;
@@ -99,9 +141,22 @@ export class HUD {
       handlers.onResume();
     });
     this.root.querySelector("[data-exit]")?.addEventListener("click", handlers.onExit);
+    this.root.querySelector("[data-help-open]")?.addEventListener("click", () => this.setHelp(true));
+    this.root.querySelector("[data-help-close]")?.addEventListener("click", () => this.setHelp(false));
+    this.root.querySelector("[data-help-from-pause]")?.addEventListener("click", () => this.setHelp(true));
 
     this.toastEl = this.root.querySelector("[data-toast]");
     host.appendChild(this.root);
+
+    // First match: show short German how-to-play.
+    try {
+      this.helpSeen = localStorage.getItem("tc_help_seen") === "1";
+    } catch {
+      this.helpSeen = false;
+    }
+    if (!this.helpSeen) {
+      this.setHelp(true);
+    }
   }
 
   unmount(): void {
@@ -120,6 +175,27 @@ export class HUD {
 
   isPaused(): boolean {
     return this.showPause;
+  }
+
+  toggleHelp(): void {
+    this.setHelp(!this.showHelp);
+  }
+
+  setHelp(value: boolean): void {
+    this.showHelp = value;
+    this.root?.querySelector("[data-help]")?.classList.toggle("hidden", !value);
+    if (!value && !this.helpSeen) {
+      this.helpSeen = true;
+      try {
+        localStorage.setItem("tc_help_seen", "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  isHelpOpen(): boolean {
+    return this.showHelp;
   }
 
   showToast(message: string): void {

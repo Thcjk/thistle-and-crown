@@ -37,6 +37,7 @@ export class MatchScene implements GameScene {
   private selectionRing: Mesh | null = null;
   private attackRangeRing: Mesh | null = null;
   private abilityDecal: Mesh | null = null;
+  private moveMarker: Mesh | null = null;
   private shadows: ShadowGenerator | null = null;
   private hud = new HUD();
   private ended = false;
@@ -103,6 +104,19 @@ export class MatchScene implements GameScene {
     this.abilityDecal.material = decalMat;
     this.abilityDecal.setEnabled(false);
 
+    this.moveMarker = MeshBuilder.CreateDisc(
+      "moveMarker",
+      { radius: 0.55, tessellation: 24 },
+      this.scene,
+    );
+    this.moveMarker.rotation.x = Math.PI / 2;
+    const moveMat = new StandardMaterial("moveMarkerMat", this.scene);
+    moveMat.diffuseColor = new Color3(0.9, 0.78, 0.35);
+    moveMat.emissiveColor = new Color3(0.35, 0.28, 0.08);
+    moveMat.alpha = 0.75;
+    this.moveMarker.material = moveMat;
+    this.moveMarker.setEnabled(false);
+
     this.deps.input.setWorldPicker((sx, sy) => {
       if (!this.scene || !this.camera) return null;
       return this.camera.screenToGround(this.scene, sx, sy);
@@ -151,11 +165,18 @@ export class MatchScene implements GameScene {
     if (!this.match || !this.camera || !this.cameraController || this.ended) return;
 
     const input = this.deps.input.consumeFrame();
-    if (input.openMenu) {
-      this.paused = !this.paused;
-      this.hud.setPause(this.paused);
+    if (input.toggleHelp) {
+      this.hud.toggleHelp();
     }
-    if (this.paused) return;
+    if (input.openMenu) {
+      if (this.hud.isHelpOpen()) {
+        this.hud.setHelp(false);
+      } else {
+        this.paused = !this.paused;
+        this.hud.setPause(this.paused);
+      }
+    }
+    if (this.paused || this.hud.isHelpOpen()) return;
 
     if (input.toggleScoreboard) {
       this.hud.toggleScoreboard();
@@ -221,7 +242,7 @@ export class MatchScene implements GameScene {
   }
 
   update(dt: number): void {
-    if (!this.match || this.ended || this.paused) return;
+    if (!this.match || this.ended || this.paused || this.hud.isHelpOpen()) return;
     this.match.simulate(dt);
   }
 
@@ -242,9 +263,11 @@ export class MatchScene implements GameScene {
     this.selectionRing?.dispose();
     this.attackRangeRing?.dispose();
     this.abilityDecal?.dispose();
+    this.moveMarker?.dispose();
     this.selectionRing = null;
     this.attackRangeRing = null;
     this.abilityDecal = null;
+    this.moveMarker = null;
     this.shadows = null;
     this.camera = null;
     this.cameraController = null;
@@ -304,7 +327,14 @@ export class MatchScene implements GameScene {
   private updateOverlays(showAttackRange: boolean): void {
     const match = this.match;
     const player = match?.player;
-    if (!match || !player || !this.selectionRing || !this.attackRangeRing || !this.abilityDecal) {
+    if (
+      !match ||
+      !player ||
+      !this.selectionRing ||
+      !this.attackRangeRing ||
+      !this.abilityDecal ||
+      !this.moveMarker
+    ) {
       return;
     }
 
@@ -315,6 +345,18 @@ export class MatchScene implements GameScene {
     this.attackRangeRing.scaling.setAll(range);
     this.attackRangeRing.position.set(player.position.x, 0.06, player.position.z);
     this.attackRangeRing.setEnabled(player.isAlive && showAttackRange);
+
+    const marker = match.moveMarker;
+    if (marker) {
+      const pulse = 0.85 + 0.25 * Math.sin(marker.life * 14);
+      this.moveMarker.scaling.setAll(pulse);
+      this.moveMarker.position.set(marker.x, 0.04, marker.z);
+      const mat = this.moveMarker.material as StandardMaterial;
+      mat.alpha = Math.min(0.85, marker.life * 0.7);
+      this.moveMarker.setEnabled(true);
+    } else {
+      this.moveMarker.setEnabled(false);
+    }
 
     if (match.isAbilityTargeting()) {
       const pendingSlot = match.getPendingAbilitySlot();

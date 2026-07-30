@@ -1,4 +1,9 @@
-import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
+import {
+  ArcRotateCamera,
+  Matrix,
+  Vector3,
+  type Scene,
+} from "@babylonjs/core";
 import type { MapDefinition } from "@/types/data.types";
 import { CameraBounds } from "./CameraBounds";
 import { CAMERA_EDGE_MARGIN_PX, CAMERA_EDGE_PAN_SPEED } from "@/utils/constants";
@@ -62,7 +67,6 @@ export class MobaCamera {
     this.radius = clamp(this.radius + delta * 2.5, 22, 55);
   }
 
-  /** Screen-edge camera pan when unlocked (classic MOBA). */
   edgePan(
     dt: number,
     pointerX: number,
@@ -98,31 +102,26 @@ export class MobaCamera {
     this.camera.radius = lerp(this.camera.radius, this.radius, t);
   }
 
+  /**
+   * Screen → ground (Y=0). Pass CSS/client canvas coords — Babylon applies hardware scaling itself.
+   */
   screenToGround(
     scene: Scene,
     screenX: number,
     screenY: number,
   ): { x: number; z: number } | null {
-    const engine = scene.getEngine();
-    const canvas = engine.getRenderingCanvas();
-    if (!canvas) return null;
+    const canvas = scene.getEngine().getRenderingCanvas();
+    if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return null;
 
-    const scaleX = engine.getRenderWidth() / Math.max(1, canvas.clientWidth);
-    const scaleY = engine.getRenderHeight() / Math.max(1, canvas.clientHeight);
-    const ray = scene.createPickingRay(
-      screenX * scaleX,
-      screenY * scaleY,
-      null,
-      this.camera,
-    );
-
-    const groundY = 0;
+    const ray = scene.createPickingRay(screenX, screenY, Matrix.Identity(), this.camera);
     if (Math.abs(ray.direction.y) < 1e-5) return null;
-    const t = (groundY - ray.origin.y) / ray.direction.y;
+    const t = (0 - ray.origin.y) / ray.direction.y;
     if (t < 0) return null;
+
+    const half = 58;
     return {
-      x: ray.origin.x + ray.direction.x * t,
-      z: ray.origin.z + ray.direction.z * t,
+      x: clamp(ray.origin.x + ray.direction.x * t, -half, half),
+      z: clamp(ray.origin.z + ray.direction.z * t, -half, half),
     };
   }
 }

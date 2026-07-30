@@ -27,6 +27,7 @@ export interface InputFrame {
   centerCamera: boolean;
   toggleScoreboard: boolean;
   openMenu: boolean;
+  toggleHelp: boolean;
   zoomDelta: number;
   pendingAbility: AbilityKey | null;
   pointerScreenX: number;
@@ -147,7 +148,9 @@ export class InputManager {
       } else if (this.pendingAbility && this.pendingAbility !== "B") {
         this.pendingAbilityConfirm = intent;
       } else {
+        // Left-click: select enemies if under cursor, otherwise move (friendlier for new players).
         this.pendingSelect = intent;
+        this.pendingMove = intent;
       }
     }
   };
@@ -218,6 +221,7 @@ export class InputManager {
       centerCamera: this.keysPressed.has(" "),
       toggleScoreboard: this.keysPressed.has("tab"),
       openMenu: this.keysPressed.has("escape") && !this.cancelAbility,
+      toggleHelp: this.keysPressed.has("h") || this.keysPressed.has("f1"),
       zoomDelta: this.zoomDelta,
       pendingAbility: this.pendingAbility,
       pointerScreenX: this.pointerScreenX,
