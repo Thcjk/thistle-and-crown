@@ -27,7 +27,8 @@ export class MobaCamera {
     this.camera.upperRadiusLimit = 55;
     this.camera.panningSensibility = 0;
     this.camera.inertia = 0.7;
-    this.camera.attachControl(false);
+    // Do not attach default Babylon controls – they steal right-click from MOBA movement.
+    this.camera.inputs.clear();
   }
 
   setFollow(enabled: boolean): void {
@@ -74,7 +75,20 @@ export class MobaCamera {
     screenX: number,
     screenY: number,
   ): { x: number; z: number } | null {
-    const ray = scene.createPickingRay(screenX, screenY, null, this.camera);
+    const engine = scene.getEngine();
+    const canvas = engine.getRenderingCanvas();
+    if (!canvas) return null;
+
+    // Convert CSS-pixel offsets into engine render-buffer coordinates (HiDPI-safe).
+    const scaleX = engine.getRenderWidth() / Math.max(1, canvas.clientWidth);
+    const scaleY = engine.getRenderHeight() / Math.max(1, canvas.clientHeight);
+    const ray = scene.createPickingRay(
+      screenX * scaleX,
+      screenY * scaleY,
+      null,
+      this.camera,
+    );
+
     const groundY = 0;
     if (Math.abs(ray.direction.y) < 1e-5) return null;
     const t = (groundY - ray.origin.y) / ray.direction.y;

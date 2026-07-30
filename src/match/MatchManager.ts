@@ -148,6 +148,10 @@ export class MatchManager {
     return bot ? this.ai.getState(bot.id) : "-";
   }
 
+  isAbilityTargeting(): boolean {
+    return this.pendingAbilitySlot !== null;
+  }
+
   dispose(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers = [];
@@ -158,16 +162,17 @@ export class MatchManager {
     const player = this.player;
     if (!player || this.state.phase !== "active") return;
 
-    if (input.pendingAbility) {
-      this.pendingAbilitySlot = input.pendingAbility;
+    if (input.cancelAbility) {
+      this.pendingAbilitySlot = null;
     }
 
-    if (input.selectCommand) {
+    if (input.selectCommand?.hasWorld) {
       const hit = this.pickEntity(input.selectCommand.worldX, input.selectCommand.worldZ);
       this.selectedTargetId = hit?.id ?? null;
     }
 
-    if (input.moveCommand) {
+    if (input.moveCommand?.hasWorld) {
+      this.pendingAbilitySlot = null;
       const hit = this.pickEntity(input.moveCommand.worldX, input.moveCommand.worldZ, true);
       if (hit && this.targeting.areEnemies(player, hit)) {
         player.orderAttack(hit.id);
@@ -181,7 +186,7 @@ export class MatchManager {
       }
     }
 
-    if (input.abilityConfirm && this.pendingAbilitySlot) {
+    if (input.abilityConfirm?.hasWorld && this.pendingAbilitySlot) {
       this.tryPlayerAbility(
         this.pendingAbilitySlot,
         {
@@ -191,10 +196,13 @@ export class MatchManager {
         },
       );
       this.pendingAbilitySlot = null;
-    } else if (input.abilityPresses.length > 0) {
+    }
+
+    if (input.abilityPresses.length > 0) {
       for (const slot of input.abilityPresses) {
         if (slot === "B") {
           this.startRecall(player);
+          this.pendingAbilitySlot = null;
           continue;
         }
         const ability = player.abilities.find((a) => a.slot === slot);

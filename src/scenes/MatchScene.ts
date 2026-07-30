@@ -149,6 +149,9 @@ export class MatchScene implements GameScene {
     }
 
     this.match.handleInput(input);
+    if (!this.match.isAbilityTargeting()) {
+      this.deps.input.clearPendingAbility();
+    }
     this.syncMeshes();
     this.updateOverlays();
 

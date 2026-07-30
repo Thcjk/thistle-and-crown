@@ -8,6 +8,7 @@ export interface PointerWorldIntent {
   screenY: number;
   worldX: number;
   worldZ: number;
+  hasWorld: boolean;
   shift: boolean;
   ctrl: boolean;
 }
@@ -17,6 +18,7 @@ export interface InputFrame {
   selectCommand: PointerWorldIntent | null;
   abilityPresses: AbilityKey[];
   abilityConfirm: PointerWorldIntent | null;
+  cancelAbility: boolean;
   centerCamera: boolean;
   toggleScoreboard: boolean;
   openMenu: boolean;
@@ -37,15 +39,24 @@ export class InputManager {
   private pendingSelect: PointerWorldIntent | null = null;
   private pendingAbilityConfirm: PointerWorldIntent | null = null;
   private pendingAbility: AbilityKey | null = null;
+  private cancelAbility = false;
   private worldPicker: ((screenX: number, screenY: number) => Vec2 | null) | null = null;
   private bound = false;
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat) return;
     const key = event.key.toLowerCase();
     if (!this.keysDown.has(key)) {
       this.keysPressed.add(key);
     }
     this.keysDown.add(key);
+
+    if (key === "escape" && this.pendingAbility) {
+      this.pendingAbility = null;
+      this.cancelAbility = true;
+      event.preventDefault();
+      return;
+    }
 
     const ability = this.mapAbilityKey(key);
     if (ability) {
@@ -64,6 +75,12 @@ export class InputManager {
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (!this.canvas) return;
+    // Ignore UI clicks that bubble from overlay buttons.
+    const target = event.target;
+    if (target instanceof HTMLElement && target !== this.canvas) {
+      return;
+    }
+
     const rect = this.canvas.getBoundingClientRect();
     const screenX = event.clientX - rect.left;
     const screenY = event.clientY - rect.top;
@@ -74,16 +91,18 @@ export class InputManager {
       screenY,
       worldX: world?.x ?? 0,
       worldZ: world?.z ?? 0,
+      hasWorld: world !== null,
       shift: event.shiftKey,
       ctrl: event.ctrlKey,
     };
 
     if (event.button === 2) {
+      // MOBA standard: right-click cancels skill targeting and issues a move/attack.
       if (this.pendingAbility && this.pendingAbility !== "B") {
-        this.pendingAbilityConfirm = intent;
-      } else {
-        this.pendingMove = intent;
+        this.pendingAbility = null;
+        this.cancelAbility = true;
       }
+      this.pendingMove = intent;
       event.preventDefault();
     } else if (event.button === 0) {
       if (this.pendingAbility && this.pendingAbility !== "B") {
@@ -143,9 +162,10 @@ export class InputManager {
       selectCommand: this.pendingSelect,
       abilityPresses,
       abilityConfirm: this.pendingAbilityConfirm,
+      cancelAbility: this.cancelAbility,
       centerCamera: this.keysPressed.has(" "),
       toggleScoreboard: this.keysPressed.has("tab"),
-      openMenu: this.keysPressed.has("escape"),
+      openMenu: this.keysPressed.has("escape") && !this.cancelAbility,
       zoomDelta: this.zoomDelta,
       pendingAbility: this.pendingAbility,
     };
@@ -153,6 +173,7 @@ export class InputManager {
     this.pendingMove = null;
     this.pendingSelect = null;
     this.pendingAbilityConfirm = null;
+    this.cancelAbility = false;
     this.zoomDelta = 0;
     this.keysPressed.clear();
     return frame;
