@@ -1,6 +1,7 @@
 import { ArcRotateCamera, Vector3, type Scene } from "@babylonjs/core";
 import type { MapDefinition } from "@/types/data.types";
 import { CameraBounds } from "./CameraBounds";
+import { CAMERA_EDGE_MARGIN_PX, CAMERA_EDGE_PAN_SPEED } from "@/utils/constants";
 import { clamp, lerp } from "@/utils/math";
 
 export class MobaCamera {
@@ -27,7 +28,6 @@ export class MobaCamera {
     this.camera.upperRadiusLimit = 55;
     this.camera.panningSensibility = 0;
     this.camera.inertia = 0.7;
-    // Do not attach default Babylon controls – they steal right-click from MOBA movement.
     this.camera.inputs.clear();
   }
 
@@ -36,6 +36,11 @@ export class MobaCamera {
   }
 
   isFollowing(): boolean {
+    return this.follow;
+  }
+
+  toggleFollow(): boolean {
+    this.follow = !this.follow;
     return this.follow;
   }
 
@@ -55,6 +60,29 @@ export class MobaCamera {
 
   applyZoom(delta: number): void {
     this.radius = clamp(this.radius + delta * 2.5, 22, 55);
+  }
+
+  /** Screen-edge camera pan when unlocked (classic MOBA). */
+  edgePan(
+    dt: number,
+    pointerX: number,
+    pointerY: number,
+    canvasW: number,
+    canvasH: number,
+  ): void {
+    if (this.follow) return;
+    const m = CAMERA_EDGE_MARGIN_PX;
+    let dx = 0;
+    let dz = 0;
+    if (pointerX <= m) dx -= 1;
+    if (pointerX >= canvasW - m) dx += 1;
+    if (pointerY <= m) dz += 1;
+    if (pointerY >= canvasH - m) dz -= 1;
+    if (dx === 0 && dz === 0) return;
+    const speed = CAMERA_EDGE_PAN_SPEED * dt;
+    const next = this.bounds.clamp(this.targetX + dx * speed, this.targetZ + dz * speed);
+    this.targetX = next.x;
+    this.targetZ = next.z;
   }
 
   update(dt: number, followX?: number, followZ?: number): void {
@@ -79,7 +107,6 @@ export class MobaCamera {
     const canvas = engine.getRenderingCanvas();
     if (!canvas) return null;
 
-    // Convert CSS-pixel offsets into engine render-buffer coordinates (HiDPI-safe).
     const scaleX = engine.getRenderWidth() / Math.max(1, canvas.clientWidth);
     const scaleY = engine.getRenderHeight() / Math.max(1, canvas.clientHeight);
     const ray = scene.createPickingRay(

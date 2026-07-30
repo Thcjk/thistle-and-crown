@@ -2,16 +2,33 @@ import type { MatchManager } from "@/match/MatchManager";
 
 export class Minimap {
   private root: HTMLElement | null = null;
+  private onPan: ((worldX: number, worldZ: number) => void) | null = null;
 
-  mount(host: HTMLElement): void {
+  mount(host: HTMLElement, onPan?: (worldX: number, worldZ: number) => void): void {
     this.root = document.createElement("div");
-    this.root.className = "minimap";
+    this.root.className = "minimap interactive";
+    this.onPan = onPan ?? null;
+    this.root.addEventListener("pointerdown", (event) => {
+      if (!this.root || !this.onPan) return;
+      const rect = this.root.getBoundingClientRect();
+      const nx = (event.clientX - rect.left) / rect.width;
+      const nz = (event.clientY - rect.top) / rect.height;
+      const worldX = nx * 120 - 60;
+      const worldZ = 60 - nz * 120;
+      this.onPan(worldX, worldZ);
+      event.preventDefault();
+    });
     host.appendChild(this.root);
   }
 
   update(match: MatchManager): void {
     if (!this.root) return;
-    this.root.innerHTML = "";
+    // Preserve click handler: rebuild dots in a layer.
+    const layer = document.createElement("div");
+    layer.style.position = "absolute";
+    layer.style.inset = "0";
+    layer.style.pointerEvents = "none";
+
     const plot = (x: number, z: number, className: string): void => {
       const dot = document.createElement("div");
       dot.className = `minimap-dot ${className}`;
@@ -19,7 +36,7 @@ export class Minimap {
       const nz = ((60 - z) / 120) * 100;
       dot.style.left = `${nx}%`;
       dot.style.top = `${nz}%`;
-      this.root!.appendChild(dot);
+      layer.appendChild(dot);
     };
 
     for (const tower of match.towers) {
@@ -57,5 +74,7 @@ export class Minimap {
         );
       }
     }
+
+    this.root.replaceChildren(layer);
   }
 }

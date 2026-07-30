@@ -17,6 +17,7 @@ import { HUD } from "@/ui/HUD";
 import type { EventBus } from "@/engine/EventBus";
 import type { InputManager } from "@/engine/InputManager";
 import type { DebugManager } from "@/engine/DebugManager";
+import { getAbilityDefinition } from "@/data/abilities";
 import { logger } from "@/utils/logger";
 
 interface MatchSceneDeps {
@@ -34,6 +35,7 @@ export class MatchScene implements GameScene {
   private factory = new EntityFactory();
   private meshes = new Map<string, Mesh>();
   private selectionRing: Mesh | null = null;
+  private attackRangeRing: Mesh | null = null;
   private abilityDecal: Mesh | null = null;
   private shadows: ShadowGenerator | null = null;
   private hud = new HUD();
@@ -42,6 +44,7 @@ export class MatchScene implements GameScene {
   private unsubscribers: Array<() => void> = [];
   private hudAccum = 0;
   private decalTimer: number | null = null;
+
   constructor(private readonly deps: MatchSceneDeps) {}
 
   enter(context: GameSceneContext, data?: unknown): void {
@@ -73,6 +76,20 @@ export class MatchScene implements GameScene {
     ringMat.emissiveColor = new Color3(0.35, 0.28, 0.1);
     ringMat.alpha = 0.55;
     this.selectionRing.material = ringMat;
+
+    this.attackRangeRing = MeshBuilder.CreateDisc(
+      "attackRange",
+      { radius: 1, tessellation: 48 },
+      this.scene,
+    );
+    this.attackRangeRing.rotation.x = Math.PI / 2;
+    const rangeMat = new StandardMaterial("attackRangeMat", this.scene);
+    rangeMat.diffuseColor = new Color3(0.75, 0.7, 0.35);
+    rangeMat.emissiveColor = new Color3(0.2, 0.18, 0.05);
+    rangeMat.alpha = 0.18;
+    rangeMat.wireframe = false;
+    this.attackRangeRing.material = rangeMat;
+    this.attackRangeRing.setEnabled(false);
 
     this.abilityDecal = MeshBuilder.CreateDisc(
       "abilityDecal",
@@ -106,6 +123,10 @@ export class MatchScene implements GameScene {
       onExit: () => {
         void context.switchScene("mainMenu");
       },
+      onMinimapPan: (x, z) => {
+        this.camera?.panToward(x, z);
+        if (this.match) this.match.cameraLocked = false;
+      },
     });
 
     this.unsubscribers.push(
@@ -123,7 +144,7 @@ export class MatchScene implements GameScene {
     );
 
     this.syncMeshes();
-    logger.info("MatchScene", "Prototype match scene ready");
+    logger.info("MatchScene", "MOBA core match scene ready");
   }
 
   frame(renderDt: number): void {
@@ -140,20 +161,31 @@ export class MatchScene implements GameScene {
       this.hud.toggleScoreboard();
     }
 
-    const player = this.match.player;
-    if (player) {
-      this.cameraController.handleInput(input, player.position.x, player.position.z);
-      this.camera.update(renderDt, player.position.x, player.position.z);
-    } else {
-      this.camera.update(renderDt);
-    }
-
     this.match.handleInput(input);
     if (!this.match.isAbilityTargeting()) {
       this.deps.input.clearPendingAbility();
     }
+
+    const player = this.match.player;
+    if (player) {
+      this.cameraController.handleInput(
+        input,
+        player.position.x,
+        player.position.z,
+        this.match.cameraLocked,
+        renderDt,
+      );
+      this.camera.update(
+        renderDt,
+        this.match.cameraLocked ? player.position.x : undefined,
+        this.match.cameraLocked ? player.position.z : undefined,
+      );
+    } else {
+      this.camera.update(renderDt);
+    }
+
     this.syncMeshes();
-    this.updateOverlays();
+    this.updateOverlays(input.attackMoveArmed || this.deps.input.isAttackMoveArmed());
 
     this.hudAccum += renderDt;
     if (this.hudAccum >= 0.1) {
@@ -179,6 +211,10 @@ export class MatchScene implements GameScene {
         this.match,
         this.deps.debug.isEnabled ? this.deps.debug.getSnapshot() : null,
         this.hudAccum,
+        {
+          attackMoveArmed: this.deps.input.isAttackMoveArmed(),
+          abilityTargeting: this.match.isAbilityTargeting(),
+        },
       );
       this.hudAccum = 0;
     }
@@ -204,8 +240,10 @@ export class MatchScene implements GameScene {
     }
     this.meshes.clear();
     this.selectionRing?.dispose();
+    this.attackRangeRing?.dispose();
     this.abilityDecal?.dispose();
     this.selectionRing = null;
+    this.attackRangeRing = null;
     this.abilityDecal = null;
     this.shadows = null;
     this.camera = null;
@@ -263,11 +301,32 @@ export class MatchScene implements GameScene {
     }
   }
 
-  private updateOverlays(): void {
-    const player = this.match?.player;
-    if (!player || !this.selectionRing) return;
+  private updateOverlays(showAttackRange: boolean): void {
+    const match = this.match;
+    const player = match?.player;
+    if (!match || !player || !this.selectionRing || !this.attackRangeRing || !this.abilityDecal) {
+      return;
+    }
+
     this.selectionRing.position.set(player.position.x, 0.05, player.position.z);
     this.selectionRing.setEnabled(player.isAlive);
+
+    const range = player.stats.attackRange + player.transform.radius;
+    this.attackRangeRing.scaling.setAll(range);
+    this.attackRangeRing.position.set(player.position.x, 0.06, player.position.z);
+    this.attackRangeRing.setEnabled(player.isAlive && showAttackRange);
+
+    if (match.isAbilityTargeting()) {
+      const pendingSlot = match.getPendingAbilitySlot();
+      const runtime = player.abilities.find((a) => a.slot === pendingSlot);
+      const def = runtime ? getAbilityDefinition(runtime.abilityId) : undefined;
+      const radius = def?.radius ?? def?.range ?? 3;
+      this.abilityDecal.scaling.setAll(Math.max(0.5, radius) / 3.5);
+      this.abilityDecal.position.set(player.position.x, 0.07, player.position.z);
+      this.abilityDecal.setEnabled(true);
+    } else if (!this.decalTimer) {
+      this.abilityDecal.setEnabled(false);
+    }
   }
 
   private pulseAbilityDecal(abilityId: string): void {

@@ -29,6 +29,7 @@ export class HUD {
       onUpgrade: (abilityId: string) => void;
       onResume: () => void;
       onExit: () => void;
+      onMinimapPan?: (x: number, z: number) => void;
     },
   ): void {
     this.unmount();
@@ -40,6 +41,12 @@ export class HUD {
         <span data-timer>00:00</span>
         <span class="crown" data-kills-c>0</span>
         <span data-towers>Towers 0 / 0</span>
+      </div>
+      <div class="hud-stats-row">
+        <span data-kda>0/0/0</span>
+        <span data-cs>CS 0</span>
+        <span data-cam>Cam Lock</span>
+        <span data-mode></span>
       </div>
       <div class="hud-bottom">
         <div class="hud-portrait" data-portrait>B</div>
@@ -64,6 +71,7 @@ export class HUD {
       <div data-world-bars></div>
       <div data-damage></div>
       <div class="toast hidden" data-toast></div>
+      <div class="control-hint">RMB move · A+LMB attack-move · S stop · Y cam · B recall · QWER skills</div>
       <div class="debug-panel hidden" data-debug></div>
       <div class="pause-menu hidden" data-pause>
         <div class="menu-panel">
@@ -81,7 +89,7 @@ export class HUD {
     const deathHost = this.root.querySelector("[data-death]") as HTMLElement;
 
     this.abilityBar.mount(abilitiesHost, (id) => handlers.onUpgrade(id));
-    this.minimap.mount(minimapHost);
+    this.minimap.mount(minimapHost, handlers.onMinimapPan);
     this.shop.mount(shopHost, match.shop.listItems(), handlers.onPurchase);
     this.scoreboard.mount(scoreHost);
     this.death.mount(deathHost);
@@ -121,7 +129,12 @@ export class HUD {
     this.toastTimer = 2.5;
   }
 
-  update(match: MatchManager, debug: DebugSnapshot | null, dt: number): void {
+  update(
+    match: MatchManager,
+    debug: DebugSnapshot | null,
+    dt: number,
+    extras?: { attackMoveArmed?: boolean; abilityTargeting?: boolean },
+  ): void {
     if (!this.root) return;
     const player = match.player;
     const snap = match.state.snapshot();
@@ -157,8 +170,21 @@ export class HUD {
       if (xpText) xpText.textContent = `XP ${Math.floor(player.experience)}`;
       const level = this.root.querySelector("[data-level]");
       const gold = this.root.querySelector("[data-gold]");
+      const kda = this.root.querySelector("[data-kda]");
+      const cs = this.root.querySelector("[data-cs]");
+      const cam = this.root.querySelector("[data-cam]");
+      const mode = this.root.querySelector("[data-mode]");
       if (level) level.textContent = `Lv ${player.level}`;
       if (gold) gold.textContent = `${Math.floor(player.gold)}g`;
+      if (kda) kda.textContent = `${player.kills}/${player.deaths}/${player.assists}`;
+      if (cs) cs.textContent = `CS ${player.creepScore}`;
+      if (cam) cam.textContent = match.cameraLocked ? "Cam Lock" : "Cam Free";
+      if (mode) {
+        if (extras?.attackMoveArmed) mode.textContent = "Attack-move…";
+        else if (extras?.abilityTargeting) mode.textContent = "Aim skill…";
+        else if (player.hasSpawnProtection) mode.textContent = "Spawn shield";
+        else mode.textContent = "";
+      }
       this.abilityBar.update(player);
       this.death.update(player);
     }
@@ -176,7 +202,6 @@ export class HUD {
       const el = document.createElement("div");
       el.className = "damage-float";
       el.textContent = String(d.amount);
-      // Approximate projection: HUD uses minimap-like normalized coords for prototype.
       const nx = ((d.x + 60) / 120) * 100;
       const nz = ((60 - d.z) / 120) * 100;
       el.style.left = `${nx}%`;

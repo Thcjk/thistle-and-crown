@@ -1,6 +1,7 @@
 import type { EventBus } from "@/engine/EventBus";
 import type { Hero } from "@/entities/heroes/Hero";
 import type { MapDefinition } from "@/types/data.types";
+import { SPAWN_PROTECTION_SECONDS } from "@/utils/constants";
 
 export class RespawnManager {
   constructor(
@@ -24,6 +25,7 @@ export class RespawnManager {
       hero.clearOrders();
       hero.setPosition(spawn.x, 0, spawn.z);
       hero.respawnTimer = 0;
+      hero.spawnProtection = SPAWN_PROTECTION_SECONDS;
       hero.aiState = "Respawn";
       this.events.emit("heroRespawned", { entityId: hero.id });
     }

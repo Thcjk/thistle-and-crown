@@ -16,6 +16,7 @@ import { TargetingSystem } from "@/combat/TargetingSystem";
 import { DeathSystem } from "@/combat/DeathSystem";
 import { AbilitySystem } from "@/combat/AbilitySystem";
 import { CombatSystem } from "@/combat/CombatSystem";
+import { AssistSystem, grantAssist } from "@/combat/AssistSystem";
 import { GoldSystem } from "@/progression/GoldSystem";
 import { ExperienceSystem } from "@/progression/ExperienceSystem";
 import { LevelSystem } from "@/progression/LevelSystem";
@@ -31,13 +32,17 @@ import { CoreStructure } from "@/entities/structures/CoreStructure";
 import { Projectile } from "@/entities/projectiles/Projectile";
 import type { LivingEntity } from "@/entities/core/LivingEntity";
 import type { CombatEntity } from "@/entities/core/CombatEntity";
+import { SeparationSystem } from "@/world/SeparationSystem";
 import { getHeroDefinition } from "@/data/heroes";
 import { getAbilityDefinition } from "@/data/abilities";
 import { getMinionDefinition } from "@/data/minions/definitions";
 import { monstersById } from "@/data/monsters/camps";
 import {
+  ASSIST_GOLD,
   BANNER_WAVE_EVERY,
   BASE_HEAL_PER_SECOND,
+  FOUNTAIN_DAMAGE_PER_SECOND,
+  HERO_KILL_GOLD,
   MINION_MELEE_COUNT,
   MINION_RANGED_COUNT,
   MINION_WAVE_INTERVAL,
@@ -83,12 +88,15 @@ export class MatchManager {
   readonly shop = new ShopSystem();
   private readonly ai = new AIController();
   private readonly laneAI = new LaneAI();
+  private readonly assists = new AssistSystem();
+  private readonly separation = new SeparationSystem();
 
   private waveTimer = 5;
   private campRespawn = new Map<string, number>();
   private selectedTargetId: string | null = null;
   private pendingAbilitySlot: string | null = null;
   private playerId: string | null = null;
+  cameraLocked = true;
   private floatingDamage: Array<{
     id: string;
     x: number;
@@ -152,6 +160,10 @@ export class MatchManager {
     return this.pendingAbilitySlot !== null;
   }
 
+  getPendingAbilitySlot(): string | null {
+    return this.pendingAbilitySlot;
+  }
+
   dispose(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers = [];
@@ -162,6 +174,19 @@ export class MatchManager {
     const player = this.player;
     if (!player || this.state.phase !== "active") return;
 
+    if (input.toggleCameraLock) {
+      this.cameraLocked = !this.cameraLocked;
+      this.events.emit("uiToast", {
+        message: this.cameraLocked ? "Camera locked" : "Camera unlocked",
+      });
+    }
+
+    if (input.stopCommand) {
+      player.orderStop();
+      player.recalling = false;
+      this.pendingAbilitySlot = null;
+    }
+
     if (input.cancelAbility) {
       this.pendingAbilitySlot = null;
     }
@@ -169,10 +194,33 @@ export class MatchManager {
     if (input.selectCommand?.hasWorld) {
       const hit = this.pickEntity(input.selectCommand.worldX, input.selectCommand.worldZ);
       this.selectedTargetId = hit?.id ?? null;
+      if (hit && this.targeting.areEnemies(player, hit)) {
+        player.orderAttack(hit.id);
+      }
+    }
+
+    if (input.attackMoveConfirm?.hasWorld) {
+      this.pendingAbilitySlot = null;
+      const hit = this.pickEntity(
+        input.attackMoveConfirm.worldX,
+        input.attackMoveConfirm.worldZ,
+        true,
+      );
+      if (hit && this.targeting.areEnemies(player, hit)) {
+        player.orderAttack(hit.id);
+        this.selectedTargetId = hit.id;
+      } else {
+        player.orderAttackMove({
+          x: input.attackMoveConfirm.worldX,
+          y: 0,
+          z: input.attackMoveConfirm.worldZ,
+        });
+      }
     }
 
     if (input.moveCommand?.hasWorld) {
       this.pendingAbilitySlot = null;
+      player.recalling = false;
       const hit = this.pickEntity(input.moveCommand.worldX, input.moveCommand.worldZ, true);
       if (hit && this.targeting.areEnemies(player, hit)) {
         player.orderAttack(hit.id);
@@ -258,6 +306,12 @@ export class MatchManager {
     this.updateHeroes(dt);
     this.updateTowers(dt);
     this.updateProjectiles(dt);
+    this.updateFountainPressure(dt);
+    this.separation.apply([
+      ...this.heroes.filter((h) => h.isAlive),
+      ...this.minions.filter((m) => m.isAlive),
+      ...this.monsters.filter((m) => m.isAlive),
+    ]);
     this.processDeaths();
     this.respawn.update(this.heroes, dt);
     this.cleanup();
@@ -347,8 +401,11 @@ export class MatchManager {
           amount: Math.round(payload.amount),
           life: 0.8,
         });
-        const player = this.player;
         const source = this.allLiving().find((e) => e.id === payload.sourceId);
+        if (source?.kind === "hero" && target.kind === "hero") {
+          this.assists.recordDamage(target.id, source.id, this.state.elapsedSeconds);
+        }
+        const player = this.player;
         if (player && target.id === player.id && source) {
           this.abilities.handlePassiveOnHeroDamage(player, source);
         }
@@ -377,20 +434,27 @@ export class MatchManager {
   }
 
   private updateHeroes(dt: number): void {
+    const living = this.allLiving();
+    const resolve = (from: Vec3, to: Vec3) => this.collision.resolve(from, to);
+
     for (const hero of this.heroes) {
       this.statuses.tick(hero, dt);
       this.cooldowns.tick(hero, dt);
 
       if (hero.dead) continue;
+      if (hero.spawnProtection > 0) {
+        hero.spawnProtection = Math.max(0, hero.spawnProtection - dt);
+      }
 
       if (hero.recalling) {
         hero.recallTimer -= dt;
-        if (hero.isMoving || hero.attackTargetId) {
+        if (hero.isMoving || hero.attackTargetId || hero.orderMode === "attackMove") {
           hero.recalling = false;
         } else if (hero.recallTimer <= 0) {
           const spawn = this.spawns.getHeroSpawn(hero.teamId as TeamId);
           hero.setPosition(spawn.x, 0, spawn.z);
           hero.recalling = false;
+          hero.spawnProtection = 1.5;
         }
       }
 
@@ -398,17 +462,45 @@ export class MatchManager {
         hero.heal(BASE_HEAL_PER_SECOND * dt);
       }
 
-      // Natural regen
       hero.heal((hero.stats.healthRegenPer5 / 5) * dt);
 
+      if (hero.orderMode === "hold") {
+        continue;
+      }
+
+      if (hero.orderMode === "attackMove") {
+        this.combat.updateAttackMove(hero, living, dt, this.projectiles, resolve);
+        continue;
+      }
+
       const target = hero.attackTargetId
-        ? this.allLiving().find((e) => e.id === hero.attackTargetId) ?? null
+        ? living.find((e) => e.id === hero.attackTargetId) ?? null
         : null;
       if (hero.attackTargetId && target) {
         this.combat.updateAutoAttack(hero, target, dt, this.projectiles);
       } else {
-        this.combat.updateMovement(hero, dt, (from, to) => this.collision.resolve(from, to));
+        this.combat.updateMovement(hero, dt, resolve);
       }
+    }
+  }
+
+  /** Enemy heroes inside an opposing heal zone take fountain pressure damage. */
+  private updateFountainPressure(dt: number): void {
+    for (const hero of this.heroes) {
+      if (!hero.isAlive) continue;
+      const enemyTeam: TeamId = hero.teamId === "highland" ? "crown" : "highland";
+      if (!this.spawns.isInHealZone(enemyTeam, hero.position)) continue;
+      this.damage.apply(
+        hero,
+        {
+          sourceId: "fountain",
+          targetId: hero.id,
+          amount: FOUNTAIN_DAMAGE_PER_SECOND * dt,
+          damageType: "true",
+          timestamp: performance.now(),
+        },
+        true,
+      );
     }
   }
 
@@ -523,18 +615,40 @@ export class MatchManager {
         const victim = entity as Hero;
         if (killer) {
           killer.kills += 1;
-          this.gold.add(killer, 200);
+          this.gold.add(killer, HERO_KILL_GOLD);
           this.teams.registerKill(killer.teamId as TeamId, victim.teamId as TeamId);
+        }
+        const assistIds = this.assists.collectAssists(
+          victim.id,
+          killerId,
+          this.state.elapsedSeconds,
+        );
+        for (const assistId of assistIds) {
+          const helper = this.heroes.find((h) => h.id === assistId);
+          if (helper && helper.teamId !== victim.teamId) {
+            grantAssist(helper, ASSIST_GOLD);
+            this.events.emit("goldChanged", {
+              entityId: helper.id,
+              gold: helper.gold,
+              delta: ASSIST_GOLD,
+            });
+          }
         }
         this.experience.grantKillXp(
           killer,
           entity.xpReward,
           entity.position,
-          this.heroes.filter((h) => h.teamId === killer?.teamId),
+          this.heroes.filter((h) => h.teamId === (killer?.teamId ?? victim.teamId)),
         );
       } else {
+        // Last-hit gold: only the killing blow receives gold (classic MOBA economy).
         if (killer) {
-          this.gold.add(killer, entity.goldReward);
+          if (MatchRules.lastHitOnlyGold) {
+            this.gold.add(killer, entity.goldReward);
+            if (entity.kind === "minion" || entity.kind === "monster") {
+              killer.creepScore += 1;
+            }
+          }
           this.experience.grantKillXp(
             killer,
             entity.xpReward,
@@ -563,6 +677,8 @@ export class MatchManager {
               teamId: entity.teamId,
             });
           }
+        } else if (!MatchRules.lastHitOnlyGold) {
+          // no-op placeholder for shared bounty modes later
         }
       }
     }

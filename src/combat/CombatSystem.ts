@@ -6,6 +6,7 @@ import { DamageSystem } from "./DamageSystem";
 import { TargetingSystem } from "./TargetingSystem";
 import { directionTo, distance2D, moveTowards, yawFromDirection } from "@/utils/math";
 import type { TeamId } from "@/types/game.types";
+import { MatchRules } from "@/match/MatchRules";
 
 export class CombatSystem {
   constructor(
@@ -43,6 +44,52 @@ export class CombatSystem {
     entity.isMoving = !step.arrived;
     if (step.arrived) {
       entity.intendedMoveTarget = null;
+      if (entity.orderMode === "attackMove") {
+        entity.attackMovePoint = null;
+        entity.orderMode = "hold";
+      }
+    }
+  }
+
+  /**
+   * Attack-move: chase destination, but hard-engage the nearest valid enemy in scan range.
+   */
+  updateAttackMove(
+    entity: CombatEntity,
+    candidates: LivingEntity[],
+    dt: number,
+    projectiles: Projectile[],
+    resolvePosition: (from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }) => {
+      x: number;
+      y: number;
+      z: number;
+    },
+  ): void {
+    if (!entity.isAlive || entity.orderMode !== "attackMove") return;
+
+    if (entity.attackTargetId) {
+      const locked = candidates.find((e) => e.id === entity.attackTargetId) ?? null;
+      if (locked?.isAlive) {
+        this.updateAutoAttack(entity, locked, dt, projectiles);
+        return;
+      }
+      entity.attackTargetId = null;
+    }
+
+    const acquired = this.targeting.findNearestEnemy(
+      entity,
+      candidates,
+      MatchRules.attackMoveScanRange,
+    );
+    if (acquired) {
+      entity.attackTargetId = acquired.id;
+      this.updateAutoAttack(entity, acquired, dt, projectiles);
+      return;
+    }
+
+    if (entity.attackMovePoint) {
+      entity.intendedMoveTarget = { ...entity.attackMovePoint };
+      this.updateMovement(entity, dt, resolvePosition);
     }
   }
 
@@ -54,6 +101,7 @@ export class CombatSystem {
   ): void {
     if (!attacker.isAlive || attacker.isStunned() || !target?.isAlive) return;
     if (!this.targeting.areEnemies(attacker, target)) return;
+    if (target.isInvulnerable()) return;
 
     const range = attacker.stats.attackRange + attacker.transform.radius + target.transform.radius;
     const dist = distance2D(attacker.position, target.position);

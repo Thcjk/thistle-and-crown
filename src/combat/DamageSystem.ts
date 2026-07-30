@@ -10,7 +10,7 @@ export class DamageSystem {
     if (!target.isAlive || target.isInvulnerable()) {
       return { applied: 0, killed: false, absorbedByShield: 0, event };
     }
-    if (!sourceAlive && event.sourceId !== "world") {
+    if (!sourceAlive && event.sourceId !== "world" && event.sourceId !== "fountain") {
       return { applied: 0, killed: false, absorbedByShield: 0, event };
     }
 

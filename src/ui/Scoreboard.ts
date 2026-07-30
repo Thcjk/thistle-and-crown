@@ -13,7 +13,7 @@ export class Scoreboard {
     const snap = match.state.snapshot();
     const rows = match.heroes
       .map((h) => {
-        return `<div>${h.displayName} — ${h.kills}/${h.deaths}/${h.assists} · ${Math.floor(h.gold)}g · Lv ${h.level}</div>`;
+        return `<div>${h.displayName} — ${h.kills}/${h.deaths}/${h.assists} · CS ${h.creepScore} · ${Math.floor(h.gold)}g · Lv ${h.level}</div>`;
       })
       .join("");
     this.root.innerHTML = `

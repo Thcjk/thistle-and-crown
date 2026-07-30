@@ -6,14 +6,14 @@ This repository contains the foundation and a **local playable prototype** (play
 
 ## Current status
 
-Phase 1 prototype:
+Phase 2 MOBA core (in progress):
 
 - Boot → Main Menu → Hero Select → Match → Results
 - Playable hero: **Brenna Stonehand**
 - Enemy bot: **Sir Aldric Vale** (state-machine AI)
-- Three-lane map readability; functional waves on mid
-- Towers, cores, minions, jungle camps
-- Abilities Q / W / E / R, gold, XP, levels, shop
+- Three-lane waves, towers, cores, jungle camps
+- Attack-move, stop, camera lock/edge pan, minimap pan
+- Last-hit gold, assists, CS, spawn protection, fountain pressure
 - HTML/CSS HUD over Babylon.js canvas
 
 ## Tech
@@ -59,16 +59,21 @@ VITE_BASE_PATH=/thistle-and-crown/ npm run build
 
 | Input | Action |
 | --- | --- |
-| Right-click ground | Move |
+| Right-click ground | Move (cancels skill targeting) |
 | Right-click enemy | Attack |
-| Left-click | Select / UI |
-| Q W E R | Abilities (self-cast or aim) |
+| Left-click enemy | Select + attack |
+| A then left-click | Attack-move |
+| S | Stop / hold |
+| Q W E R | Abilities (self-cast or aim with left-click) |
 | D F | Reserved |
 | B | Recall channel |
+| Y | Toggle camera lock |
 | Tab | Scoreboard |
-| Space | Center camera on hero |
+| Space | Center + lock camera on hero |
 | Mouse wheel | Zoom |
-| Esc | Pause menu |
+| Minimap click | Pan camera (unlocks follow) |
+| Screen edges | Pan camera when unlocked |
+| Esc | Cancel targeting / pause menu |
 
 Shop purchases require standing in your base heal zone.
 

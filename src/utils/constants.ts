@@ -1,7 +1,7 @@
 import type { TeamId } from "@/types/game.types";
 
 export const GAME_NAME = "Thistle & Crown";
-export const GAME_VERSION = "0.1.0";
+export const GAME_VERSION = "0.2.0";
 
 export const TICK_RATE = 30;
 export const FIXED_DT = 1 / TICK_RATE;
@@ -13,6 +13,7 @@ export const HERO_SLOTS_PER_TEAM = 5;
 export const STARTING_GOLD = 500;
 export const PASSIVE_GOLD_PER_SECOND = 2;
 export const BASE_HEAL_PER_SECOND = 80;
+export const FOUNTAIN_DAMAGE_PER_SECOND = 120;
 
 export const MINION_WAVE_INTERVAL = 30;
 export const MINION_MELEE_COUNT = 3;
@@ -21,6 +22,12 @@ export const BANNER_WAVE_EVERY = 3;
 
 export const DEFAULT_RESPAWN_BASE = 8;
 export const DEFAULT_RESPAWN_PER_LEVEL = 1.5;
+export const SPAWN_PROTECTION_SECONDS = 3;
+
+export const ASSIST_GOLD = 75;
+export const HERO_KILL_GOLD = 200;
+export const CAMERA_EDGE_PAN_SPEED = 28;
+export const CAMERA_EDGE_MARGIN_PX = 28;
 
 export const TEAM_COLORS: Record<TeamId | "neutral", string> = {
   highland: "#3d6b5a",

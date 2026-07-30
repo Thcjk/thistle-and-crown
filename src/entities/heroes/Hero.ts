@@ -2,7 +2,12 @@ import { CombatEntity } from "@/entities/core/CombatEntity";
 import { generateEntityId } from "@/entities/core/Entity";
 import type { HeroDefinition } from "@/types/data.types";
 import type { TeamId, Vec3 } from "@/types/game.types";
-import { MAX_HERO_LEVEL, MAX_INVENTORY_SLOTS, STARTING_GOLD } from "@/utils/constants";
+import {
+  MAX_HERO_LEVEL,
+  MAX_INVENTORY_SLOTS,
+  SPAWN_PROTECTION_SECONDS,
+  STARTING_GOLD,
+} from "@/utils/constants";
 import { getXpRequired } from "@/data/balance/progression";
 
 export interface AbilityRuntime {
@@ -26,6 +31,8 @@ export class Hero extends CombatEntity {
   kills = 0;
   deaths = 0;
   assists = 0;
+  creepScore = 0;
+  spawnProtection = SPAWN_PROTECTION_SECONDS;
   aiState = "Idle";
 
   constructor(
@@ -56,6 +63,14 @@ export class Hero extends CombatEntity {
 
   get level(): number {
     return this.stats.level;
+  }
+
+  get hasSpawnProtection(): boolean {
+    return this.spawnProtection > 0;
+  }
+
+  override isInvulnerable(): boolean {
+    return this.hasSpawnProtection || super.isInvulnerable();
   }
 
   canLevelUp(): boolean {
