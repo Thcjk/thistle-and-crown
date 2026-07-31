@@ -34,6 +34,15 @@ export interface InputFrame {
   pointerScreenY: number;
   canvasWidth: number;
   canvasHeight: number;
+  /** True while Space is held — temporary camera follow (LoL). */
+  centerCameraHeld: boolean;
+  /** Middle-mouse drag pan segment for this frame. */
+  middleDrag: {
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+  } | null;
 }
 
 /**
@@ -55,6 +64,15 @@ export class InputManager {
   private pointerScreenY = 0;
   private canvasWidth = 1;
   private canvasHeight = 1;
+  private middleDragging = false;
+  private middleLastX = 0;
+  private middleLastY = 0;
+  private middleDragAccum: {
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+  } | null = null;
   private worldPicker: ((screenX: number, screenY: number) => Vec2 | null) | null = null;
   private bound = false;
 
@@ -81,6 +99,10 @@ export class InputManager {
       return;
     }
 
+    if (key === " " || key === "tab") {
+      event.preventDefault();
+    }
+
     const ability = this.mapAbilityKey(key);
     if (ability) {
       this.pendingAbility = ability;
@@ -100,10 +122,23 @@ export class InputManager {
   private readonly onPointerMove = (event: PointerEvent): void => {
     if (!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
-    this.pointerScreenX = event.clientX - rect.left;
-    this.pointerScreenY = event.clientY - rect.top;
+    const screenX = event.clientX - rect.left;
+    const screenY = event.clientY - rect.top;
+    this.pointerScreenX = screenX;
+    this.pointerScreenY = screenY;
     this.canvasWidth = rect.width;
     this.canvasHeight = rect.height;
+
+    if (this.middleDragging) {
+      this.middleDragAccum = {
+        fromX: this.middleLastX,
+        fromY: this.middleLastY,
+        toX: screenX,
+        toY: screenY,
+      };
+      this.middleLastX = screenX;
+      this.middleLastY = screenY;
+    }
   };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
@@ -120,6 +155,14 @@ export class InputManager {
     this.pointerScreenY = screenY;
     this.canvasWidth = rect.width;
     this.canvasHeight = rect.height;
+
+    if (event.button === 1) {
+      this.middleDragging = true;
+      this.middleLastX = screenX;
+      this.middleLastY = screenY;
+      event.preventDefault();
+      return;
+    }
 
     const world = this.worldPicker?.(screenX, screenY) ?? null;
     const intent: PointerWorldIntent = {
@@ -154,6 +197,12 @@ export class InputManager {
     }
   };
 
+  private readonly onPointerUp = (event: PointerEvent): void => {
+    if (event.button === 1) {
+      this.middleDragging = false;
+    }
+  };
+
   private readonly onWheel = (event: WheelEvent): void => {
     this.zoomDelta += Math.sign(event.deltaY);
     event.preventDefault();
@@ -170,9 +219,14 @@ export class InputManager {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("pointermove", this.onPointerMove);
+    window.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("contextmenu", this.onContextMenu);
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    // Prevent middle-click auto-scroll on Windows.
+    canvas.addEventListener("auxclick", (e) => {
+      if (e.button === 1) e.preventDefault();
+    });
     this.bound = true;
   }
 
@@ -181,11 +235,13 @@ export class InputManager {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("pointermove", this.onPointerMove);
+    window.removeEventListener("pointerup", this.onPointerUp);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("wheel", this.onWheel);
     this.bound = false;
     this.canvas = null;
+    this.middleDragging = false;
   }
 
   setWorldPicker(picker: (screenX: number, screenY: number) => Vec2 | null): void {
@@ -218,6 +274,7 @@ export class InputManager {
       stopCommand: this.keysPressed.has("s"),
       toggleCameraLock: this.keysPressed.has("y"),
       centerCamera: this.keysPressed.has(" "),
+      centerCameraHeld: this.keysDown.has(" "),
       toggleScoreboard: this.keysPressed.has("tab"),
       openMenu: this.keysPressed.has("escape") && !this.cancelAbility,
       toggleHelp: this.keysPressed.has("h") || this.keysPressed.has("f1"),
@@ -227,12 +284,14 @@ export class InputManager {
       pointerScreenY: this.pointerScreenY,
       canvasWidth: this.canvasWidth,
       canvasHeight: this.canvasHeight,
+      middleDrag: this.middleDragAccum,
     };
 
     this.pendingMove = null;
     this.pendingSelect = null;
     this.pendingAbilityConfirm = null;
     this.pendingAttackMoveConfirm = null;
+    this.middleDragAccum = null;
     this.cancelAbility = false;
     this.zoomDelta = 0;
     this.keysPressed.clear();

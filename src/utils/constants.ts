@@ -26,8 +26,8 @@ export const SPAWN_PROTECTION_SECONDS = 3;
 
 export const ASSIST_GOLD = 75;
 export const HERO_KILL_GOLD = 200;
-export const CAMERA_EDGE_PAN_SPEED = 28;
-export const CAMERA_EDGE_MARGIN_PX = 28;
+export const CAMERA_EDGE_PAN_SPEED = 52;
+export const CAMERA_EDGE_MARGIN_PX = 22;
 
 export const TEAM_COLORS: Record<TeamId | "neutral", string> = {
   highland: "#3d6b5a",

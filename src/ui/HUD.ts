@@ -6,7 +6,7 @@ import { Minimap } from "./Minimap";
 import { Scoreboard } from "./Scoreboard";
 import { ShopPanel } from "./ShopPanel";
 import { DeathOverlay } from "./DeathOverlay";
-import { HealthBar } from "./HealthBar";
+import { HealthBar, type WorldToScreen } from "./HealthBar";
 
 export class HUD {
   private root: HTMLElement | null = null;
@@ -47,7 +47,7 @@ export class HUD {
       <div class="hud-stats-row">
         <span data-kda>0/0/0</span>
         <span data-cs>CS 0</span>
-        <span data-cam>Cam Lock</span>
+        <span data-cam>Cam Free</span>
         <span data-mode></span>
       </div>
       <div class="hud-bottom">
@@ -73,7 +73,7 @@ export class HUD {
       <div data-world-bars></div>
       <div data-damage></div>
       <div class="toast hidden" data-toast></div>
-      <div class="control-hint">Rechtsklick bewegen/angreifen · A+LMB Attack-Move · H Hilfe</div>
+      <div class="control-hint">RMB bewegen · Mausrand/MMB Kamera · Y Lock · Space folgen · H Hilfe</div>
       <button class="help-fab interactive" type="button" data-help-open title="Hilfe (H)">?</button>
       <div class="help-overlay hidden" data-help>
         <div class="help-panel interactive">
@@ -97,7 +97,7 @@ export class HUD {
                 <li><kbd>S</kbd> — Stoppen</li>
                 <li><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> — Fähigkeiten (manchmal nochmal klicken zum Zielen)</li>
                 <li><kbd>B</kbd> — Recall (zurück zur Basis)</li>
-                <li><kbd>Y</kbd> — Kamera an Heldin / frei · <kbd>Leertaste</kbd> zentrieren</li>
+                <li>Kamera: Maus an den Bildschirmrand · <kbd>Mittelklick</kbd> ziehen · <kbd>Y</kbd> Lock · <kbd>Leertaste</kbd> halten = folgen</li>
                 <li>Minimap-Klick — Kamera dorthin · <kbd>Esc</kbd> Pause · <kbd>Tab</kbd> Scoreboard</li>
               </ul>
             </section>
@@ -161,6 +161,7 @@ export class HUD {
   }
 
   unmount(): void {
+    this.healthBars.clear();
     this.root?.remove();
     this.root = null;
   }
@@ -270,23 +271,6 @@ export class HUD {
     this.scoreboard.update(match);
     this.root.querySelector("[data-scoreboard]")?.classList.toggle("hidden", !this.showScoreboard);
 
-    const barsHost = this.root.querySelector("[data-world-bars]") as HTMLElement;
-    this.healthBars.update(barsHost, match);
-
-    const dmgHost = this.root.querySelector("[data-damage]") as HTMLElement;
-    dmgHost.innerHTML = "";
-    for (const d of match.getFloatingDamage()) {
-      const el = document.createElement("div");
-      el.className = "damage-float";
-      el.textContent = String(d.amount);
-      const nx = ((d.x + 60) / 120) * 100;
-      const nz = ((60 - d.z) / 120) * 100;
-      el.style.left = `${nx}%`;
-      el.style.top = `${20 + nz * 0.5}%`;
-      el.style.opacity = String(Math.max(0, d.life));
-      dmgHost.appendChild(el);
-    }
-
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.toastEl?.classList.add("hidden");
@@ -307,6 +291,27 @@ export class HUD {
       ].join("\n");
     } else {
       debugEl?.classList.add("hidden");
+    }
+  }
+
+  /** Every frame: HP bars + floating combat text projected above units. */
+  updateWorldOverlays(match: MatchManager, project: WorldToScreen): void {
+    if (!this.root) return;
+    const barsHost = this.root.querySelector("[data-world-bars]") as HTMLElement | null;
+    if (barsHost) this.healthBars.update(barsHost, match, project);
+
+    const dmgHost = this.root.querySelector("[data-damage]") as HTMLElement | null;
+    if (!dmgHost) return;
+    dmgHost.innerHTML = "";
+    for (const d of match.getFloatingDamage()) {
+      const screen = project(d.x, 2.1, d.z);
+      if (!screen?.visible) continue;
+      const el = document.createElement("div");
+      el.className = "damage-float";
+      el.textContent = String(d.amount);
+      el.style.transform = `translate(${screen.x}px, ${screen.y - (1.2 - d.life) * 28}px) translate(-50%, -50%)`;
+      el.style.opacity = String(Math.max(0, Math.min(1, d.life)));
+      dmgHost.appendChild(el);
     }
   }
 }

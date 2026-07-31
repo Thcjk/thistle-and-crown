@@ -96,7 +96,7 @@ export class MatchManager {
   private selectedTargetId: string | null = null;
   private pendingAbilitySlot: string | null = null;
   private playerId: string | null = null;
-  cameraLocked = true;
+  cameraLocked = false;
   /** Last issued ground move/attack-move point for UI marker. */
   moveMarker: { x: number; z: number; life: number } | null = null;
   private floatingDamage: Array<{

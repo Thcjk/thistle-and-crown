@@ -287,27 +287,67 @@
 
 .world-hp {
   position: absolute;
-  height: 5px;
-  background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  left: 0;
+  top: 0;
+  height: 7px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.85);
   overflow: hidden;
   pointer-events: none;
+  will-change: transform;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.world-hp.hero {
+  height: 9px;
+}
+
+.world-hp.structure {
+  height: 8px;
 }
 
 .world-hp > span {
   display: block;
   height: 100%;
-  background: #5aa05a;
+  background: #3d9a55;
+}
+
+.world-hp.player > span {
+  background: linear-gradient(90deg, #2f9e4a, #5dcf6e);
+}
+
+.world-hp.ally > span {
+  background: #3d9a55;
+}
+
+.world-hp.enemy > span {
+  background: #c44545;
+}
+
+.world-hp.neutral > span {
+  background: #c4a03a;
 }
 
 .damage-float {
   position: absolute;
+  left: 0;
+  top: 0;
   color: #f0d090;
   font-family: var(--font-display);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 700;
   text-shadow: 0 1px 2px #000;
   pointer-events: none;
-  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+}
+
+[data-world-bars],
+[data-damage] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
 }
 
 .help-fab {

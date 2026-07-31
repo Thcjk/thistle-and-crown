@@ -187,19 +187,25 @@ export class MatchScene implements GameScene {
       this.deps.input.clearPendingAbility();
     }
 
+    if (input.middleDrag) {
+      this.match.cameraLocked = false;
+    }
+
     const player = this.match.player;
     if (player) {
       this.cameraController.handleInput(
         input,
+        this.scene!,
         player.position.x,
         player.position.z,
         this.match.cameraLocked,
         renderDt,
       );
+      const tracking = this.match.cameraLocked || input.centerCameraHeld;
       this.camera.update(
         renderDt,
-        this.match.cameraLocked ? player.position.x : undefined,
-        this.match.cameraLocked ? player.position.z : undefined,
+        tracking ? player.position.x : undefined,
+        tracking ? player.position.z : undefined,
       );
     } else {
       this.camera.update(renderDt);
@@ -207,6 +213,12 @@ export class MatchScene implements GameScene {
 
     this.syncMeshes();
     this.updateOverlays(input.attackMoveArmed || this.deps.input.isAttackMoveArmed());
+
+    if (this.scene && this.camera) {
+      const cam = this.camera;
+      const scene = this.scene;
+      this.hud.updateWorldOverlays(this.match, (x, y, z) => cam.worldToScreen(scene, x, y, z));
+    }
 
     this.hudAccum += renderDt;
     if (this.hudAccum >= 0.1) {

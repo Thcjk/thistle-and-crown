@@ -1,33 +1,120 @@
 import type { MatchManager } from "@/match/MatchManager";
+import type { LivingEntity } from "@/entities/core/LivingEntity";
 
-/** Screen-space HP bars using simple world-to-HUD normalization for the prototype. */
+export type WorldToScreen = (
+  x: number,
+  y: number,
+  z: number,
+) => { x: number; y: number; visible: boolean } | null;
+
+function barHeightOffset(entity: LivingEntity): number {
+  switch (entity.kind) {
+    case "hero":
+      return 2.35;
+    case "tower":
+      return 4.2;
+    case "core":
+      return 3.2;
+    case "monster":
+      return 1.85;
+    default:
+      return 1.35;
+  }
+}
+
+function barWidth(entity: LivingEntity): number {
+  switch (entity.kind) {
+    case "hero":
+      return 64;
+    case "tower":
+    case "core":
+      return 72;
+    case "monster":
+      return 44;
+    default:
+      return 36;
+  }
+}
+
+/**
+ * LoL-style floating HP bars projected above each unit's head.
+ */
 export class HealthBar {
-  update(host: HTMLElement, match: MatchManager): void {
-    host.innerHTML = "";
-    const entities = [
+  private readonly elements = new Map<string, HTMLDivElement>();
+
+  update(host: HTMLElement, match: MatchManager, project: WorldToScreen): void {
+    const playerTeam = match.player?.teamId;
+    const entities: LivingEntity[] = [
       ...match.heroes,
       ...match.minions,
       ...match.monsters,
       ...match.towers,
       ...match.cores,
     ];
+
+    const seen = new Set<string>();
     for (const entity of entities) {
       if (!entity.isAlive) continue;
-      if (entity.kind === "minion" && entity.healthRatio > 0.99) continue;
-      const el = document.createElement("div");
-      el.className = "world-hp";
-      const nx = ((entity.position.x + 60) / 120) * 100;
-      const nz = ((60 - entity.position.z) / 120) * 100;
-      const width = entity.kind === "hero" || entity.kind === "tower" || entity.kind === "core" ? 42 : 28;
+      // Hide full-HP minions to reduce clutter (still show when damaged).
+      if (entity.kind === "minion" && entity.healthRatio > 0.995) continue;
+
+      seen.add(entity.id);
+      const screen = project(
+        entity.position.x,
+        barHeightOffset(entity),
+        entity.position.z,
+      );
+      if (!screen?.visible) {
+        const existing = this.elements.get(entity.id);
+        if (existing) existing.style.display = "none";
+        continue;
+      }
+
+      let el = this.elements.get(entity.id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "world-hp";
+        const fill = document.createElement("span");
+        el.appendChild(fill);
+        host.appendChild(el);
+        this.elements.set(entity.id, el);
+      }
+
+      const width = barWidth(entity);
+      const isPlayer = match.player?.id === entity.id;
+      const isAlly = playerTeam !== undefined && entity.teamId === playerTeam && !isPlayer;
+      const isEnemy =
+        playerTeam !== undefined &&
+        entity.teamId !== playerTeam &&
+        entity.teamId !== "neutral";
+
+      el.classList.toggle("player", isPlayer);
+      el.classList.toggle("ally", isAlly);
+      el.classList.toggle("enemy", isEnemy);
+      el.classList.toggle("neutral", entity.teamId === "neutral");
+      el.classList.toggle("structure", entity.kind === "tower" || entity.kind === "core");
+      el.classList.toggle("hero", entity.kind === "hero");
+
+      el.style.display = "block";
       el.style.width = `${width}px`;
-      el.style.left = `calc(${nx}% - ${width / 2}px)`;
-      el.style.top = `calc(${18 + nz * 0.55}% - 18px)`;
-      const fill = document.createElement("span");
-      fill.style.width = `${entity.healthRatio * 100}%`;
-      if (entity.teamId === "crown") fill.style.background = "#a85a5a";
-      if (entity.teamId === "neutral") fill.style.background = "#b89540";
-      el.appendChild(fill);
-      host.appendChild(el);
+      el.style.transform = `translate(${screen.x - width / 2}px, ${screen.y - 10}px)`;
+
+      const fill = el.firstElementChild as HTMLSpanElement | null;
+      if (fill) {
+        fill.style.width = `${Math.max(0, Math.min(100, entity.healthRatio * 100))}%`;
+      }
     }
+
+    for (const [id, el] of this.elements) {
+      if (!seen.has(id)) {
+        el.remove();
+        this.elements.delete(id);
+      }
+    }
+  }
+
+  clear(): void {
+    for (const el of this.elements.values()) el.remove();
+    this.elements.clear();
   }
 }
