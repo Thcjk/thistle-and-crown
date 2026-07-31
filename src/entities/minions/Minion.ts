@@ -20,7 +20,7 @@ export class Minion extends CombatEntity {
       },
       position,
       { ...def.stats },
-      def.role === "banner" ? 0.45 : 0.35,
+      def.role === "banner" || def.role === "siege" ? 0.45 : 0.35,
     );
     this.role = def.role;
     this.laneId = laneId;

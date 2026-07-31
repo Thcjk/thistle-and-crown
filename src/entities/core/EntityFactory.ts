@@ -30,7 +30,9 @@ export class EntityFactory {
     const radius = asset?.radius ?? entity.transform.radius;
 
     let mesh: Mesh;
-    switch (placeholder) {
+    if (entity.kind === "barracks") {
+      mesh = this.createGateMesh(scene, entity.id, height, radius);
+    } else switch (placeholder) {
       case "tower":
         mesh = this.createTowerMesh(scene, entity.id, height, radius);
         break;
@@ -118,9 +120,12 @@ export class EntityFactory {
         crown_melee: "minion_crown_melee",
         crown_ranged: "minion_crown_ranged",
         crown_banner: "minion_crown_banner",
+        highland_siege: "minion_highland_banner",
+        crown_siege: "minion_crown_banner",
       };
       return map[entity.definitionId] ?? "minion_highland_melee";
     }
+    if (entity.kind === "barracks") return "tower_generic";
     if (entity.kind === "tower") return "tower_generic";
     if (entity.kind === "core") {
       return entity.teamId === "highland" ? "core_highland" : "core_crown";
@@ -148,6 +153,15 @@ export class EntityFactory {
     top.parent = base;
     top.position.y = height * 0.4;
     return base;
+  }
+
+  private createGateMesh(scene: Scene, id: string, height: number, radius: number): Mesh {
+    const gate = MeshBuilder.CreateBox(
+      `mesh_${id}`,
+      { width: radius * 2.4, height: height * 0.7, depth: radius * 0.8 },
+      scene,
+    );
+    return gate;
   }
 
   private createCoreMesh(scene: Scene, id: string, height: number, radius: number): Mesh {

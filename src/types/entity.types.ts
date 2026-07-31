@@ -9,7 +9,7 @@ export type EntityKind =
   | "barracks"
   | "projectile";
 
-export type MinionRole = "melee" | "ranged" | "banner";
+export type MinionRole = "melee" | "ranged" | "banner" | "siege";
 
 export interface EntityStats {
   maxHealth: number;
@@ -46,9 +46,15 @@ export type AiStateName =
   | "Idle"
   | "MoveToLane"
   | "Farm"
+  | "Harass"
   | "AttackTarget"
   | "UseAbility"
   | "Retreat"
+  | "Recall"
+  | "Shop"
+  | "Jungle"
+  | "Objective"
+  | "TowerPush"
   | "ReturnToBase"
   | "Dead"
   | "Respawn";

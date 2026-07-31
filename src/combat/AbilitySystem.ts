@@ -54,15 +54,18 @@ export class AbilitySystem {
 
   handlePassiveOnHeroDamage(target: Hero, source: LivingEntity): void {
     if (source.kind !== "hero") return;
-    if (!target.abilities.some((a) => a.abilityId === "brenna_clan_resolve")) return;
-    this.statuses.apply(target, {
-      id: "clan_resolve",
-      type: "armorBonus",
-      sourceId: target.id,
-      magnitude: 6,
-      duration: 3,
-      maxStacks: 3,
-    });
+    for (const runtime of target.abilities) {
+      const def = getAbilityDefinition(runtime.abilityId);
+      if (def?.slot !== "passive" || def.passiveTrigger !== "onHeroDamageTaken") continue;
+      this.statuses.apply(target, {
+        id: `${def.id}_stack`,
+        type: "armorBonus",
+        sourceId: target.id,
+        magnitude: def.passiveMagnitude ?? 5,
+        duration: def.passiveDuration ?? 3,
+        maxStacks: def.passiveMaxStacks ?? 3,
+      });
+    }
   }
 
   private execute(
@@ -83,6 +86,12 @@ export class AbilitySystem {
         return this.castOath(def, caster, entities);
       case "aldric_bulwark_slam":
         return this.castBulwarkSlam(def, caster, entities);
+      case "aldric_crown_guard":
+        return this.castStoneguard(def, caster);
+      case "aldric_vanguard_rush":
+        return this.castHighlandCharge(def, caster, request.aimPoint, entities, isBlocked);
+      case "aldric_oath_of_the_crown":
+        return this.castAldricOath(def, caster, entities);
       default:
         logger.warn("Ability", `Unhandled ability ${def.id}`);
         return false;
@@ -216,6 +225,33 @@ export class AbilitySystem {
           sourceId: caster.id,
           magnitude: def.allyMoveSpeedBonus ?? 0.25,
           duration: def.duration ?? 3,
+        });
+      }
+    }
+    return true;
+  }
+
+  private castAldricOath(def: AbilityDefinition, caster: Hero, entities: LivingEntity[]): boolean {
+    const radius = def.radius ?? 5.5;
+    for (const other of entities) {
+      if (distance2D(caster.position, other.position) > radius) continue;
+      if (this.targeting.areEnemies(caster, other)) {
+        this.deal(caster, other, def);
+        this.statuses.apply(other, {
+          id: "crown_oath_slow",
+          type: "slow",
+          sourceId: caster.id,
+          magnitude: def.slowPercent ?? 0.45,
+          duration: def.duration ?? 4,
+        });
+      } else if (other.teamId === caster.teamId && other.kind === "hero") {
+        other.applyShield(def.shieldAmount ?? 120);
+        this.statuses.apply(other, {
+          id: "crown_oath_armor",
+          type: "armorBonus",
+          sourceId: caster.id,
+          magnitude: 12,
+          duration: def.duration ?? 4,
         });
       }
     }

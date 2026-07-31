@@ -33,7 +33,10 @@ import { Projectile } from "@/entities/projectiles/Projectile";
 import type { LivingEntity } from "@/entities/core/LivingEntity";
 import type { CombatEntity } from "@/entities/core/CombatEntity";
 import { SeparationSystem } from "@/world/SeparationSystem";
-import { getHeroDefinition } from "@/data/heroes";
+import { LaneGate } from "@/entities/structures/LaneGate";
+import { VisionSystem } from "@/world/VisionSystem";
+import { MatchStats } from "./MatchStats";
+import { getHeroDefinition, getDefaultOpponentHeroId } from "@/data/heroes";
 import { getAbilityDefinition } from "@/data/abilities";
 import { getMinionDefinition } from "@/data/minions/definitions";
 import { monstersById } from "@/data/monsters/camps";
@@ -46,16 +49,20 @@ import {
   MINION_MELEE_COUNT,
   MINION_RANGED_COUNT,
   MINION_WAVE_INTERVAL,
+  OBJECTIVE_BONUS_GOLD,
+  SIEGE_WAVE_EVERY,
 } from "@/utils/constants";
 import { distance2D } from "@/utils/math";
 import { logger } from "@/utils/logger";
 import { resetEntityIdCounter } from "@/entities/core/Entity";
 import type { MapDefinition } from "@/types/data.types";
-import type { LaneId, TeamId, Vec3 } from "@/types/game.types";
+import type { BotDifficulty, LaneId, TeamId, Vec3 } from "@/types/game.types";
+import type { MatchResultStats } from "@/types/game.types";
 
 export interface MatchConfig {
   playerHeroId: string;
   playerTeam: TeamId;
+  botDifficulty?: BotDifficulty;
 }
 
 export class MatchManager {
@@ -65,8 +72,10 @@ export class MatchManager {
   readonly minions: Minion[] = [];
   readonly monsters: NeutralMonster[] = [];
   readonly towers: Tower[] = [];
+  readonly laneGates: LaneGate[] = [];
   readonly cores: CoreStructure[] = [];
   readonly projectiles: Projectile[] = [];
+  readonly stats = new MatchStats();
 
   private readonly teams: TeamManager;
   private readonly respawn: RespawnManager;
@@ -90,9 +99,11 @@ export class MatchManager {
   private readonly laneAI = new LaneAI();
   private readonly assists = new AssistSystem();
   private readonly separation = new SeparationSystem();
+  private readonly vision: VisionSystem;
 
-  private waveTimer = 5;
+  private waveTimer = 0;
   private campRespawn = new Map<string, number>();
+  private destroyedGates = new Set<string>();
   private selectedTargetId: string | null = null;
   private pendingAbilitySlot: string | null = null;
   private playerId: string | null = null;
@@ -134,10 +145,38 @@ export class MatchManager {
     this.experience = new ExperienceSystem(events);
     this.items = new ItemSystem(events, this.gold);
 
+    this.vision = new VisionSystem(this.map.bushes ?? []);
+
     this.bootstrap(config);
     this.bindEvents();
-    this.state.phase = "active";
+    this.stats.botDifficulty = config.botDifficulty ?? "normal";
+    this.state.phase = "countdown";
+    this.waveTimer = MINION_WAVE_INTERVAL;
     this.events.emit("matchStarted", { matchId: "prototype_01" });
+  }
+
+  getVision(): VisionSystem {
+    return this.vision;
+  }
+
+  buildResultStats(): MatchResultStats | null {
+    const player = this.player;
+    if (!player) return null;
+    const winner = this.state.winner ?? "highland";
+    return this.stats.buildResult({
+      playerId: player.id,
+      playerHeroId: player.heroDefId,
+      playerTeam: player.teamId as TeamId,
+      winner,
+      durationSeconds: this.state.elapsedSeconds,
+      kills: player.kills,
+      deaths: player.deaths,
+      assists: player.assists,
+      creepScore: player.creepScore,
+      gold: player.gold,
+      level: player.level,
+      towersDestroyed: this.state.teams[player.teamId as TeamId].towersDestroyed,
+    });
   }
 
   get player(): Hero | null {
@@ -285,6 +324,20 @@ export class MatchManager {
   }
 
   simulate(dt: number): void {
+    if (this.state.phase === "ended") return;
+
+    if (this.state.phase === "countdown") {
+      this.state.countdownSeconds -= dt;
+      if (this.state.countdownSeconds <= 0) {
+        this.state.phase = "active";
+        this.state.countdownSeconds = 0;
+        this.spawnWave();
+        this.waveTimer = MINION_WAVE_INTERVAL;
+        this.events.emit("uiToast", { message: "Minions have spawned — fight!" });
+      }
+      return;
+    }
+
     if (this.state.phase !== "active") return;
     this.state.elapsedSeconds += dt;
 
@@ -300,10 +353,15 @@ export class MatchManager {
       dt,
       heroes: this.heroes,
       entities: this.allLiving(),
+      monsters: this.monsters,
       map: this.map,
       abilitySystem: this.abilities,
       targeting: this.targeting,
+      itemSystem: this.items,
       isBlocked: (from, to) => this.collision.isBlocked(from, to),
+      isInHealZone: (teamId, pos) => this.spawns.isInHealZone(teamId, pos),
+      elapsedSeconds: this.state.elapsedSeconds,
+      playerPosition: this.player?.position ?? null,
     });
 
     this.updateMinions(dt);
@@ -340,13 +398,16 @@ export class MatchManager {
         new Tower(towerDef.id, towerDef.teamId, towerDef.laneId, towerDef.position),
       );
     }
+    for (const gateDef of this.map.laneGates ?? []) {
+      this.laneGates.push(
+        new LaneGate(gateDef.id, gateDef.teamId, gateDef.laneId, gateDef.position),
+      );
+    }
     this.cores.push(new CoreStructure("highland", this.map.bases.highland.core));
     this.cores.push(new CoreStructure("crown", this.map.bases.crown.core));
 
     const playerDef = getHeroDefinition(config.playerHeroId);
-    const enemyDef = getHeroDefinition(
-      config.playerHeroId === "brenna_stonehand" ? "aldric_vale" : "brenna_stonehand",
-    );
+    const enemyDef = getHeroDefinition(getDefaultOpponentHeroId(config.playerHeroId));
     if (!playerDef || !enemyDef) {
       throw new Error("Hero definitions missing for prototype match");
     }
@@ -358,9 +419,10 @@ export class MatchManager {
       true,
     );
     this.initHeroAbilities(player, playerDef.abilityIds);
-    // Prototype starts with QWER unlocked at level 1 for playability.
     for (const ability of player.abilities) {
-      if (ability.slot !== "passive") ability.level = ability.slot === "R" ? 0 : 1;
+      if (ability.slot === "passive") ability.level = 1;
+      else if (ability.slot === "R") ability.level = 0;
+      else ability.level = 1;
     }
     player.skillPoints = 1;
 
@@ -373,14 +435,17 @@ export class MatchManager {
     );
     this.initHeroAbilities(enemy, enemyDef.abilityIds);
     for (const ability of enemy.abilities) {
-      if (ability.slot === "Q") ability.level = 1;
+      if (ability.slot === "passive") ability.level = 1;
+      else if (ability.slot === "Q") ability.level = 1;
+      else if (ability.slot === "W") ability.level = 1;
+      else ability.level = 0;
     }
 
     this.heroes.push(player, enemy);
     this.playerId = player.id;
     this.teams.assignHeroSlot(player.teamId as TeamId, player.id);
     this.teams.assignHeroSlot(enemy.teamId as TeamId, enemy.id);
-    this.ai.register(enemy, this.map);
+    this.ai.register(enemy, this.map, config.botDifficulty ?? "normal");
 
     for (const camp of this.map.monsterCamps) {
       this.spawnCamp(camp.id);
@@ -405,6 +470,7 @@ export class MatchManager {
   private bindEvents(): void {
     this.unsubscribers.push(
       this.events.on("damageDealt", (payload) => {
+        this.stats.recordDamage(payload.sourceId, payload.targetId, payload.amount);
         const target = this.allLiving().find((e) => e.id === payload.targetId);
         if (!target) return;
         this.floatingDamage.push({
@@ -673,13 +739,36 @@ export class MatchManager {
             if (monster.buffId === "stag_endurance") {
               this.statuses.apply(killer, {
                 id: "stag_endurance",
-                type: "armorBonus",
+                type: "moveSpeedBonus",
                 sourceId: monster.id,
-                magnitude: 10,
+                magnitude: 0.15,
                 duration: 45,
                 maxStacks: 1,
               });
-              this.events.emit("uiToast", { message: "Ancient Stag blessing gained" });
+              this.statuses.apply(killer, {
+                id: "stag_regen",
+                type: "armorBonus",
+                sourceId: monster.id,
+                magnitude: 8,
+                duration: 45,
+                maxStacks: 1,
+              });
+              this.gold.add(killer, OBJECTIVE_BONUS_GOLD);
+              this.stats.recordObjective(killer.id);
+              this.events.emit("uiToast", { message: "Elder Stag blessing — speed & regen!" });
+            }
+            if (monster.buffId === "wyrm_siege") {
+              this.statuses.apply(killer, {
+                id: "wyrm_siege",
+                type: "damageReduction",
+                sourceId: monster.id,
+                magnitude: 0.1,
+                duration: 60,
+                maxStacks: 1,
+              });
+              this.gold.add(killer, OBJECTIVE_BONUS_GOLD * 2);
+              this.stats.recordObjective(killer.id);
+              this.events.emit("uiToast", { message: "Stone Wyrm favor — siege power!" });
             }
             this.events.emit("monsterCampCleared", { campId: monster.campId });
           }
@@ -689,6 +778,18 @@ export class MatchManager {
               towerId: entity.id,
               teamId: entity.teamId,
             });
+          }
+          if (entity.kind === "barracks") {
+            const gate = entity as LaneGate;
+            if (!gate.destroyed) {
+              gate.destroyed = true;
+              this.destroyedGates.add(gate.definitionId);
+              this.teams.registerLaneGateDestroyed(killer.teamId as TeamId);
+              this.gold.add(killer, gate.goldReward);
+              this.events.emit("uiToast", {
+                message: `${gate.displayName} destroyed — super minions incoming!`,
+              });
+            }
           }
         } else if (!MatchRules.lastHitOnlyGold) {
           // no-op placeholder for shared bounty modes later
@@ -742,19 +843,27 @@ export class MatchManager {
   private spawnWave(): void {
     this.state.waveIndex += 1;
     const includeBanner = this.state.waveIndex % BANNER_WAVE_EVERY === 0;
+    const includeSiege = this.state.waveIndex % SIEGE_WAVE_EVERY === 0;
     for (const laneId of MatchRules.activeLanesForWaves) {
-      this.spawnWaveForTeam("highland", laneId, includeBanner);
-      this.spawnWaveForTeam("crown", laneId, includeBanner);
+      this.spawnWaveForTeam("highland", laneId, includeBanner, includeSiege);
+      this.spawnWaveForTeam("crown", laneId, includeBanner, includeSiege);
     }
     this.events.emit("minionWaveSpawned", { waveIndex: this.state.waveIndex });
   }
 
-  private spawnWaveForTeam(teamId: TeamId, laneId: LaneId, includeBanner: boolean): void {
+  private spawnWaveForTeam(
+    teamId: TeamId,
+    laneId: LaneId,
+    includeBanner: boolean,
+    includeSiege: boolean,
+  ): void {
     const path = this.navigation.getLanePath(teamId, laneId);
     const spawn = path[0] ?? this.spawns.getHeroSpawn(teamId);
     const meleeId = teamId === "highland" ? "highland_melee" : "crown_melee";
     const rangedId = teamId === "highland" ? "highland_ranged" : "crown_ranged";
     const bannerId = teamId === "highland" ? "highland_banner" : "crown_banner";
+    const siegeId = teamId === "highland" ? "highland_siege" : "crown_siege";
+    const gateBuff = this.hasEnemyGateDown(teamId, laneId) ? 1.18 : 1;
 
     for (let i = 0; i < MINION_MELEE_COUNT; i += 1) {
       const def = getMinionDefinition(meleeId);
@@ -764,6 +873,7 @@ export class MatchManager {
         y: 0,
         z: spawn.z + (teamId === "highland" ? i * 0.4 : -i * 0.4),
       }, path);
+      this.applyMinionWaveScaling(m, gateBuff);
       this.minions.push(m);
     }
     for (let i = 0; i < MINION_RANGED_COUNT; i += 1) {
@@ -774,14 +884,43 @@ export class MatchManager {
         y: 0,
         z: spawn.z + (teamId === "highland" ? -1.5 - i * 0.35 : 1.5 + i * 0.35),
       }, path);
+      this.applyMinionWaveScaling(m, gateBuff);
       this.minions.push(m);
     }
     if (includeBanner) {
       const def = getMinionDefinition(bannerId);
       if (def) {
-        this.minions.push(new Minion(def, laneId, { ...spawn }, path));
+        const m = new Minion(def, laneId, { ...spawn }, path);
+        this.applyMinionWaveScaling(m, gateBuff * 1.05);
+        this.minions.push(m);
       }
     }
+    if (includeSiege) {
+      const def = getMinionDefinition(siegeId);
+      if (def) {
+        const m = new Minion(def, laneId, { ...spawn, x: spawn.x + 1.2 }, path);
+        this.applyMinionWaveScaling(m, gateBuff * 1.1);
+        this.minions.push(m);
+      }
+    }
+  }
+
+  private applyMinionWaveScaling(minion: Minion, gateBuff: number): void {
+    const waveScale = 1 + this.state.waveIndex * 0.035;
+    const total = waveScale * gateBuff;
+    minion.stats.maxHealth *= total;
+    minion.stats.currentHealth = minion.stats.maxHealth;
+    minion.stats.attackDamage *= total;
+  }
+
+  private hasEnemyGateDown(teamId: TeamId, laneId: LaneId): boolean {
+    const enemyTeam: TeamId = teamId === "highland" ? "crown" : "highland";
+    return this.laneGates.some(
+      (g) =>
+        g.teamId === enemyTeam &&
+        g.laneId === laneId &&
+        (g.destroyed || this.destroyedGates.has(g.definitionId)),
+    );
   }
 
   private cleanup(): void {
@@ -803,6 +942,11 @@ export class MatchManager {
         this.towers.splice(i, 1);
       }
     }
+    for (let i = this.laneGates.length - 1; i >= 0; i -= 1) {
+      if (this.laneGates[i]!.markedForRemoval || this.laneGates[i]!.destroyed) {
+        this.laneGates.splice(i, 1);
+      }
+    }
   }
 
   private allLiving(includeDead = false): LivingEntity[] {
@@ -811,6 +955,7 @@ export class MatchManager {
       ...this.minions,
       ...this.monsters,
       ...this.towers,
+      ...this.laneGates.filter((g) => !g.destroyed),
       ...this.cores,
     ];
     return includeDead ? list : list.filter((e) => e.isAlive);

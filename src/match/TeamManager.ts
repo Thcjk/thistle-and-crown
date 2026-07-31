@@ -20,4 +20,8 @@ export class TeamManager {
   registerTowerDestroyed(attackerTeam: TeamId): void {
     this.state.teams[attackerTeam].towersDestroyed += 1;
   }
+
+  registerLaneGateDestroyed(attackerTeam: TeamId): void {
+    this.state.teams[attackerTeam].laneGatesDestroyed += 1;
+  }
 }

@@ -20,6 +20,7 @@ export interface GameEvents {
   experienceChanged: { entityId: string; experience: number; level: number };
   levelUp: { entityId: string; level: number };
   itemPurchased: { entityId: string; itemId: string };
+  itemSold: { entityId: string; itemId: string; refund: number };
   towerDestroyed: { towerId: string; teamId: string };
   coreDamaged: { coreId: string; health: number };
   coreDestroyed: { coreId: string; teamId: string };

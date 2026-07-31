@@ -147,7 +147,8 @@ export class MatchScene implements GameScene {
       this.deps.eventBus.on("matchEnded", ({ winner }) => {
         if (this.ended) return;
         this.ended = true;
-        void context.switchScene("results", { winner: winner as TeamId });
+        const stats = this.match?.buildResultStats();
+        void context.switchScene("results", { winner: winner as TeamId, stats });
       }),
       this.deps.eventBus.on("uiToast", ({ message }) => {
         this.hud.showToast(message);
@@ -177,6 +178,25 @@ export class MatchScene implements GameScene {
       }
     }
     if (this.paused || this.hud.isHelpOpen()) return;
+
+    // Countdown: allow camera only, block combat input.
+    const phase = this.match.state.phase;
+    if (phase === "countdown") {
+      const player = this.match.player;
+      if (player && this.camera && this.cameraController) {
+        this.cameraController.handleInput(
+          input,
+          this.scene!,
+          player.position.x,
+          player.position.z,
+          this.match.cameraLocked,
+          renderDt,
+        );
+        this.camera.update(renderDt);
+      }
+      this.hud.updateCountdown(this.match);
+      return;
+    }
 
     if (input.toggleScoreboard) {
       this.hud.toggleScoreboard();
@@ -299,6 +319,7 @@ export class MatchScene implements GameScene {
       ...this.match.minions,
       ...this.match.monsters,
       ...this.match.towers,
+      ...this.match.laneGates,
       ...this.match.cores,
       ...this.match.projectiles,
     ];

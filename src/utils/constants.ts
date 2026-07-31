@@ -6,7 +6,7 @@ export const GAME_VERSION = "0.2.0";
 export const TICK_RATE = 30;
 export const FIXED_DT = 1 / TICK_RATE;
 
-export const MAX_HERO_LEVEL = 6;
+export const MAX_HERO_LEVEL = 10;
 export const MAX_INVENTORY_SLOTS = 6;
 export const HERO_SLOTS_PER_TEAM = 5;
 
@@ -19,6 +19,11 @@ export const MINION_WAVE_INTERVAL = 30;
 export const MINION_MELEE_COUNT = 3;
 export const MINION_RANGED_COUNT = 3;
 export const BANNER_WAVE_EVERY = 3;
+export const SIEGE_WAVE_EVERY = 4;
+export const MATCH_COUNTDOWN_SECONDS = 5;
+export const TOWER_DESTROY_GOLD = 120;
+export const LANE_GATE_DESTROY_GOLD = 80;
+export const OBJECTIVE_BONUS_GOLD = 50;
 
 export const DEFAULT_RESPAWN_BASE = 8;
 export const DEFAULT_RESPAWN_PER_LEVEL = 1.5;

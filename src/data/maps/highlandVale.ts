@@ -118,5 +118,21 @@ export const highlandValeMap: MapDefinition = {
     { id: "rock_b", position: { x: 8, y: 0, z: -16 }, radius: 2.5 },
     { id: "ruin_wall", position: { x: 0, y: 0, z: 22 }, radius: 3 },
     { id: "stone_circle", position: { x: -22, y: 0, z: -6 }, radius: 2.2 },
+    { id: "bridge_pillar", position: { x: 0, y: 0, z: 0 }, radius: 1.8 },
+  ],
+  bushes: [
+    { id: "bush_top_jungle", position: { x: -14, y: 0, z: 14 }, radius: 3.5 },
+    { id: "bush_bot_jungle", position: { x: 14, y: 0, z: -14 }, radius: 3.5 },
+    { id: "bush_mid_left", position: { x: -12, y: 0, z: -4 }, radius: 2.8 },
+    { id: "bush_mid_right", position: { x: 12, y: 0, z: 4 }, radius: 2.8 },
+    { id: "bush_bot_lane", position: { x: 24, y: 0, z: -22 }, radius: 3 },
+  ],
+  laneGates: [
+    { id: "gate_highland_top", teamId: "highland", laneId: "top", position: { x: -32, y: 0, z: 18 } },
+    { id: "gate_highland_mid", teamId: "highland", laneId: "middle", position: { x: -24, y: 0, z: -24 } },
+    { id: "gate_highland_bot", teamId: "highland", laneId: "bottom", position: { x: 18, y: 0, z: -32 } },
+    { id: "gate_crown_top", teamId: "crown", laneId: "top", position: { x: -18, y: 0, z: 32 } },
+    { id: "gate_crown_mid", teamId: "crown", laneId: "middle", position: { x: 24, y: 0, z: 24 } },
+    { id: "gate_crown_bot", teamId: "crown", laneId: "bottom", position: { x: 32, y: 0, z: -18 } },
   ],
 };

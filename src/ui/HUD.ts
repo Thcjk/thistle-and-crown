@@ -258,7 +258,8 @@ export class HUD {
       if (cs) cs.textContent = `CS ${player.creepScore}`;
       if (cam) cam.textContent = match.cameraLocked ? "Cam Lock" : "Cam Free";
       if (mode) {
-        if (extras?.attackMoveArmed) mode.textContent = "Attack-move…";
+        if (snap.phase === "countdown") mode.textContent = `Start in ${Math.ceil(snap.countdownSeconds)}…`;
+        else if (extras?.attackMoveArmed) mode.textContent = "Attack-move…";
         else if (extras?.abilityTargeting) mode.textContent = "Aim skill…";
         else if (player.hasSpawnProtection) mode.textContent = "Spawn shield";
         else mode.textContent = "";
@@ -292,6 +293,14 @@ export class HUD {
     } else {
       debugEl?.classList.add("hidden");
     }
+  }
+
+  /** Countdown overlay during match start. */
+  updateCountdown(match: MatchManager): void {
+    if (!this.root) return;
+    const mode = this.root.querySelector("[data-mode]");
+    const snap = match.state.snapshot();
+    if (mode) mode.textContent = `Start in ${Math.ceil(snap.countdownSeconds)}…`;
   }
 
   /** Every frame: HP bars + floating combat text projected above units. */

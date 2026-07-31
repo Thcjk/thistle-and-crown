@@ -21,6 +21,8 @@ export class DeathSystem {
       hero.aiState = "Dead";
     } else if (entity.kind === "tower" || entity.kind === "core") {
       entity.markedForRemoval = entity.kind === "tower";
+    } else if (entity.kind === "barracks") {
+      entity.markedForRemoval = true;
     } else {
       entity.markedForRemoval = true;
     }

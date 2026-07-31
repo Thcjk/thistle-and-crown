@@ -22,6 +22,12 @@ export const aldricVale: HeroDefinition = {
     armor: 4,
     magicResist: 2.5,
   },
-  abilityIds: ["aldric_bulwark_slam"],
+  abilityIds: [
+    "aldric_iron_resolve",
+    "aldric_bulwark_slam",
+    "aldric_crown_guard",
+    "aldric_vanguard_rush",
+    "aldric_oath_of_the_crown",
+  ],
   portraitColor: "#8b3a3a",
 };

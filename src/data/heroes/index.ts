@@ -19,3 +19,13 @@ export function getHeroDefinition(id: string): HeroDefinition | undefined {
 }
 
 export const allHeroes = Object.values(heroesById);
+
+/** Pick the default sparring opponent for a given hero. */
+export function getDefaultOpponentHeroId(playerHeroId: string): string {
+  const player = getHeroDefinition(playerHeroId);
+  if (!player) return "aldric_vale";
+  const opponent = allHeroes.find(
+    (h) => h.id !== playerHeroId && h.faction !== player.faction,
+  );
+  return opponent?.id ?? "aldric_vale";
+}

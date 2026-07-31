@@ -45,6 +45,10 @@ export interface AbilityDefinition {
   stunDuration?: number;
   dashSpeed?: number;
   statusOnHit?: StatusEffectType;
+  passiveTrigger?: "onHeroDamageTaken" | "onHeroDamageDealt";
+  passiveMagnitude?: number;
+  passiveDuration?: number;
+  passiveMaxStacks?: number;
   maxLevel: number;
 }
 
@@ -54,6 +58,10 @@ export interface ItemDefinition {
   description: string;
   cost: number;
   stats: Partial<HeroStats>;
+  /** Item IDs required to purchase (combined cost deducted separately). */
+  buildsFrom?: string[];
+  category?: "attack" | "defense" | "magic" | "movement" | "utility";
+  sellRatio?: number;
 }
 
 export interface MonsterDefinition {
@@ -152,5 +160,18 @@ export interface MapDefinition {
     id: string;
     position: Vec3;
     radius: number;
+  }>;
+  /** Bush circles for simplified vision. */
+  bushes?: Array<{
+    id: string;
+    position: Vec3;
+    radius: number;
+  }>;
+  /** Lane gates (inhibitor-style). */
+  laneGates?: Array<{
+    id: string;
+    teamId: TeamId;
+    laneId: LaneId;
+    position: Vec3;
   }>;
 }
