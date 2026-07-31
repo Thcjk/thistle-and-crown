@@ -49,6 +49,8 @@ import {
   MINION_MELEE_COUNT,
   MINION_RANGED_COUNT,
   MINION_WAVE_INTERVAL,
+  MINION_WAVE_SCALE_PER_WAVE,
+  MINION_GATE_BUFF,
   OBJECTIVE_BONUS_GOLD,
   SIEGE_WAVE_EVERY,
 } from "@/utils/constants";
@@ -867,7 +869,7 @@ export class MatchManager {
     const rangedId = teamId === "highland" ? "highland_ranged" : "crown_ranged";
     const bannerId = teamId === "highland" ? "highland_banner" : "crown_banner";
     const siegeId = teamId === "highland" ? "highland_siege" : "crown_siege";
-    const gateBuff = this.hasEnemyGateDown(teamId, laneId) ? 1.18 : 1;
+    const gateBuff = this.hasEnemyGateDown(teamId, laneId) ? MINION_GATE_BUFF : 1;
 
     for (let i = 0; i < MINION_MELEE_COUNT; i += 1) {
       const def = getMinionDefinition(meleeId);
@@ -895,7 +897,7 @@ export class MatchManager {
       const def = getMinionDefinition(bannerId);
       if (def) {
         const m = new Minion(def, laneId, { ...spawn }, path);
-        this.applyMinionWaveScaling(m, gateBuff * 1.05);
+        this.applyMinionWaveScaling(m, gateBuff * 1.03);
         this.minions.push(m);
       }
     }
@@ -903,14 +905,14 @@ export class MatchManager {
       const def = getMinionDefinition(siegeId);
       if (def) {
         const m = new Minion(def, laneId, { ...spawn, x: spawn.x + 1.2 }, path);
-        this.applyMinionWaveScaling(m, gateBuff * 1.1);
+        this.applyMinionWaveScaling(m, gateBuff * 1.05);
         this.minions.push(m);
       }
     }
   }
 
   private applyMinionWaveScaling(minion: Minion, gateBuff: number): void {
-    const waveScale = 1 + this.state.waveIndex * 0.035;
+    const waveScale = 1 + this.state.waveIndex * MINION_WAVE_SCALE_PER_WAVE;
     const total = waveScale * gateBuff;
     minion.stats.maxHealth *= total;
     minion.stats.currentHealth = minion.stats.maxHealth;

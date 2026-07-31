@@ -16,6 +16,8 @@ export const BASE_HEAL_PER_SECOND = 80;
 export const FOUNTAIN_DAMAGE_PER_SECOND = 120;
 
 export const MINION_WAVE_INTERVAL = 30;
+export const MINION_WAVE_SCALE_PER_WAVE = 0.018;
+export const MINION_GATE_BUFF = 1.1;
 export const MINION_MELEE_COUNT = 3;
 export const MINION_RANGED_COUNT = 3;
 export const BANNER_WAVE_EVERY = 3;
