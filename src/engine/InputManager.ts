@@ -148,9 +148,8 @@ export class InputManager {
       } else if (this.pendingAbility && this.pendingAbility !== "B") {
         this.pendingAbilityConfirm = intent;
       } else {
-        // Left-click: select enemies if under cursor, otherwise move (friendlier for new players).
+        // LoL-style: left click selects only (move/attack is right click).
         this.pendingSelect = intent;
-        this.pendingMove = intent;
       }
     }
   };

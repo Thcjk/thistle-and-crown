@@ -73,7 +73,7 @@ export class HUD {
       <div data-world-bars></div>
       <div data-damage></div>
       <div class="toast hidden" data-toast></div>
-      <div class="control-hint">Klick/RMB bewegen · QWER · H Hilfe · Esc Pause</div>
+      <div class="control-hint">Rechtsklick bewegen/angreifen · A+LMB Attack-Move · H Hilfe</div>
       <button class="help-fab interactive" type="button" data-help-open title="Hilfe (H)">?</button>
       <div class="help-overlay hidden" data-help>
         <div class="help-panel interactive">
@@ -91,8 +91,9 @@ export class HUD {
             <section>
               <h3>Steuerung</h3>
               <ul>
-                <li><kbd>Linksklick</kbd> / <kbd>Rechtsklick</kbd> — zum Punkt laufen (auf Feind = angreifen)</li>
-                <li><kbd>A</kbd> dann Klick — Attack-Move (laufen &amp; Feinde unterwegs angreifen)</li>
+                <li><kbd>Rechtsklick</kbd> — zum Punkt laufen · auf Feind = angreifen</li>
+                <li><kbd>Linksklick</kbd> — Ziel auswählen (kein Bewegen)</li>
+                <li><kbd>A</kbd> dann <kbd>Linksklick</kbd> — Attack-Move</li>
                 <li><kbd>S</kbd> — Stoppen</li>
                 <li><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> — Fähigkeiten (manchmal nochmal klicken zum Zielen)</li>
                 <li><kbd>B</kbd> — Recall (zurück zur Basis)</li>

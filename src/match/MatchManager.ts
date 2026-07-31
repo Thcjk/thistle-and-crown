@@ -193,12 +193,10 @@ export class MatchManager {
       this.pendingAbilitySlot = null;
     }
 
-    if (input.selectCommand?.hasWorld && !input.moveCommand) {
+    if (input.selectCommand?.hasWorld) {
+      // LoL-style: LMB selects, does not issue move/attack orders.
       const hit = this.pickEntity(input.selectCommand.worldX, input.selectCommand.worldZ);
       this.selectedTargetId = hit?.id ?? null;
-      if (hit && this.targeting.areEnemies(player, hit)) {
-        player.orderAttack(hit.id);
-      }
     }
 
     if (input.attackMoveConfirm?.hasWorld) {
@@ -225,7 +223,7 @@ export class MatchManager {
     if (input.moveCommand?.hasWorld) {
       this.pendingAbilitySlot = null;
       player.recalling = false;
-      // Tight pick only: mid-lane clicks must move to ground, not snap onto nearby minions.
+      // Tight pick: ground clicks must move to the point, not snap onto nearby minions.
       const hit = this.pickEntity(input.moveCommand.worldX, input.moveCommand.worldZ, true);
       if (hit && this.targeting.areEnemies(player, hit)) {
         player.orderAttack(hit.id);

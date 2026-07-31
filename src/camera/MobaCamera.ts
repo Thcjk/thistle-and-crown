@@ -1,6 +1,7 @@
 import {
   ArcRotateCamera,
   Matrix,
+  Ray,
   Vector3,
   type Scene,
 } from "@babylonjs/core";
@@ -16,6 +17,9 @@ export class MobaCamera {
   private targetX = 0;
   private targetZ = 0;
   private radius = 38;
+  private readonly tmpNear = new Vector3();
+  private readonly tmpFar = new Vector3();
+  private readonly tmpIdentity = Matrix.Identity();
 
   constructor(scene: Scene, map: MapDefinition) {
     this.bounds = new CameraBounds(map);
@@ -32,7 +36,8 @@ export class MobaCamera {
     this.camera.lowerRadiusLimit = 22;
     this.camera.upperRadiusLimit = 55;
     this.camera.panningSensibility = 0;
-    this.camera.inertia = 0.7;
+    // Inertia desyncs view matrix from where the player clicked.
+    this.camera.inertia = 0;
     this.camera.inputs.clear();
   }
 
@@ -94,16 +99,23 @@ export class MobaCamera {
       const clamped = this.bounds.clamp(followX, followZ);
       this.targetX = clamped.x;
       this.targetZ = clamped.z;
+      // Snap while locked — lag made center-screen clicks miss the intended ground point.
+      this.camera.setTarget(new Vector3(this.targetX, 0, this.targetZ));
+    } else {
+      const t = 1 - Math.exp(-10 * dt);
+      const cx = lerp(this.camera.target.x, this.targetX, t);
+      const cz = lerp(this.camera.target.z, this.targetZ, t);
+      this.camera.setTarget(new Vector3(cx, 0, cz));
     }
-    const t = 1 - Math.exp(-6 * dt);
-    const cx = lerp(this.camera.target.x, this.targetX, t);
-    const cz = lerp(this.camera.target.z, this.targetZ, t);
-    this.camera.setTarget(new Vector3(cx, 0, cz));
-    this.camera.radius = lerp(this.camera.radius, this.radius, t);
+    const zt = 1 - Math.exp(-10 * dt);
+    this.camera.radius = lerp(this.camera.radius, this.radius, zt);
+    this.camera.getViewMatrix();
+    this.camera.getProjectionMatrix();
   }
 
   /**
-   * Screen → ground (Y=0). Pass CSS/client canvas coords — Babylon applies hardware scaling itself.
+   * CSS-pixel screen → ground plane (Y=0).
+   * Uses Unproject with clientWidth/Height so HiDPI / hardwareScaling cannot skew the ray.
    */
   screenToGround(
     scene: Scene,
@@ -113,15 +125,57 @@ export class MobaCamera {
     const canvas = scene.getEngine().getRenderingCanvas();
     if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return null;
 
-    const ray = scene.createPickingRay(screenX, screenY, Matrix.Identity(), this.camera);
-    if (Math.abs(ray.direction.y) < 1e-5) return null;
-    const t = (0 - ray.origin.y) / ray.direction.y;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    // Clamp into canvas — edge clicks from OS can sit slightly outside.
+    const sx = clamp(screenX, 0, w);
+    const sy = clamp(screenY, 0, h);
+
+    const view = this.camera.getViewMatrix();
+    const proj = this.camera.getProjectionMatrix();
+
+    Vector3.UnprojectToRef(
+      new Vector3(sx, sy, 0),
+      w,
+      h,
+      this.tmpIdentity,
+      view,
+      proj,
+      this.tmpNear,
+    );
+    Vector3.UnprojectToRef(
+      new Vector3(sx, sy, 1),
+      w,
+      h,
+      this.tmpIdentity,
+      view,
+      proj,
+      this.tmpFar,
+    );
+
+    const dx = this.tmpFar.x - this.tmpNear.x;
+    const dy = this.tmpFar.y - this.tmpNear.y;
+    const dz = this.tmpFar.z - this.tmpNear.z;
+    if (Math.abs(dy) < 1e-6) return null;
+
+    const t = (0 - this.tmpNear.y) / dy;
     if (t < 0) return null;
+
+    let worldX = this.tmpNear.x + dx * t;
+    let worldZ = this.tmpNear.z + dz * t;
+
+    // Prefer exact terrain mesh hit when available (same geometric ray, no screen scaling).
+    const ray = Ray.CreateNewFromTo(this.tmpNear, this.tmpFar);
+    const hit = scene.pickWithRay(ray, (mesh) => mesh.name === "terrain", true);
+    if (hit?.hit && hit.pickedPoint) {
+      worldX = hit.pickedPoint.x;
+      worldZ = hit.pickedPoint.z;
+    }
 
     const half = 58;
     return {
-      x: clamp(ray.origin.x + ray.direction.x * t, -half, half),
-      z: clamp(ray.origin.z + ray.direction.z * t, -half, half),
+      x: clamp(worldX, -half, half),
+      z: clamp(worldZ, -half, half),
     };
   }
 }

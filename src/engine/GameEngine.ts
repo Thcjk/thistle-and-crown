@@ -42,7 +42,7 @@ export class GameEngine {
       adaptToDeviceRatio: true,
       antialias: true,
       powerPreference: "high-performance",
-    });
+    }, true);
 
     this.input.attach(canvas);
     this.loop = new RenderLoop(this.engine, this.time, this.debug);
