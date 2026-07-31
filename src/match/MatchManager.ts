@@ -63,6 +63,7 @@ export interface MatchConfig {
   playerHeroId: string;
   playerTeam: TeamId;
   botDifficulty?: BotDifficulty;
+  tutorialMode?: boolean;
 }
 
 export class MatchManager {
@@ -487,6 +488,9 @@ export class MatchManager {
         const player = this.player;
         if (player && target.id === player.id && source) {
           this.abilities.handlePassiveOnHeroDamage(player, source);
+        }
+        if (source?.kind === "hero") {
+          this.abilities.handlePassiveOnHeroDamageDealt(source as Hero, target);
         }
       }),
     );

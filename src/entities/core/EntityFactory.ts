@@ -110,6 +110,7 @@ export class EntityFactory {
   private resolveAssetId(entity: Entity): string {
     if (entity.kind === "hero") {
       if (entity.definitionId.includes("aldric")) return "hero_aldric";
+      if (entity.definitionId.includes("elara")) return "hero_elara";
       return "hero_brenna";
     }
     if (entity.kind === "minion") {

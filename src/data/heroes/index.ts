@@ -2,8 +2,9 @@ import type { HeroDefinition } from "@/types/data.types";
 import { assertValidOrWarn, validateHeroDefinition } from "@/utils/validation";
 import { brennaStonehand } from "./brennaStonehand";
 import { aldricVale } from "./aldricVale";
+import { elaraMistbow } from "./elaraMistbow";
 
-const rawHeroes: HeroDefinition[] = [brennaStonehand, aldricVale];
+const rawHeroes: HeroDefinition[] = [brennaStonehand, elaraMistbow, aldricVale];
 
 export const heroesById: Record<string, HeroDefinition> = {};
 

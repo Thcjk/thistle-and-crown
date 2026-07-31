@@ -37,6 +37,7 @@ export type SceneId =
   | "boot"
   | "mainMenu"
   | "heroSelect"
+  | "tutorial"
   | "match"
   | "results";
 

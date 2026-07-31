@@ -68,6 +68,23 @@ export class AbilitySystem {
     }
   }
 
+  handlePassiveOnHeroDamageDealt(source: Hero, target: LivingEntity): void {
+    if (!target.isAlive) return;
+    for (const runtime of source.abilities) {
+      const def = getAbilityDefinition(runtime.abilityId);
+      if (def?.slot !== "passive" || def.passiveTrigger !== "onHeroDamageDealt") continue;
+      if (!this.targeting.areEnemies(source, target)) continue;
+      this.statuses.apply(target, {
+        id: `${def.id}_slow`,
+        type: "slow",
+        sourceId: source.id,
+        magnitude: def.slowPercent ?? def.passiveMagnitude ?? 0.1,
+        duration: def.passiveDuration ?? 1.5,
+        maxStacks: def.passiveMaxStacks ?? 1,
+      });
+    }
+  }
+
   private execute(
     def: AbilityDefinition,
     request: AbilityCastRequest,
@@ -92,6 +109,14 @@ export class AbilitySystem {
         return this.castHighlandCharge(def, caster, request.aimPoint, entities, isBlocked);
       case "aldric_oath_of_the_crown":
         return this.castAldricOath(def, caster, entities);
+      case "elara_piercing_arrow":
+        return this.castPiercingArrow(def, caster, request.aimPoint, entities);
+      case "elara_mist_ward":
+        return this.castMistWard(def, caster);
+      case "elara_glade_step":
+        return this.castGladeStep(def, caster, request.aimPoint, isBlocked);
+      case "elara_rain_of_runes":
+        return this.castRainOfRunes(def, caster, request.aimPoint, entities);
       default:
         logger.warn("Ability", `Unhandled ability ${def.id}`);
         return false;
@@ -275,6 +300,94 @@ export class AbilitySystem {
         magnitude: def.slowPercent ?? 0.3,
         duration: def.duration ?? 1.5,
       });
+    }
+    return true;
+  }
+
+  private castPiercingArrow(
+    def: AbilityDefinition,
+    caster: Hero,
+    aim: Vec3 | undefined,
+    entities: LivingEntity[],
+  ): boolean {
+    const point = aim ?? {
+      x: caster.position.x + Math.sin(caster.transform.rotationY) * def.range,
+      y: 0,
+      z: caster.position.z + Math.cos(caster.transform.rotationY) * def.range,
+    };
+    const dir = directionTo(caster.position, point);
+    caster.transform.rotationY = yawFromDirection(dir);
+    const halfAngle = (12 * Math.PI) / 180;
+    for (const other of entities) {
+      if (!this.targeting.areEnemies(caster, other)) continue;
+      if (
+        isInCone(caster.position, caster.transform.rotationY, other.position, def.range, halfAngle)
+      ) {
+        this.deal(caster, other, def);
+      }
+    }
+    return true;
+  }
+
+  private castMistWard(def: AbilityDefinition, caster: Hero): boolean {
+    this.statuses.apply(caster, {
+      id: "mist_ward_haste",
+      type: "moveSpeedBonus",
+      sourceId: caster.id,
+      magnitude: def.allyMoveSpeedBonus ?? 0.25,
+      duration: def.duration ?? 3.5,
+    });
+    this.statuses.apply(caster, {
+      id: "mist_ward_dr",
+      type: "damageReduction",
+      sourceId: caster.id,
+      magnitude: def.damageReduction ?? 0.15,
+      duration: def.duration ?? 3.5,
+    });
+    return true;
+  }
+
+  private castGladeStep(
+    def: AbilityDefinition,
+    caster: Hero,
+    aim: Vec3 | undefined,
+    isBlocked: (from: Vec3, to: Vec3) => boolean,
+  ): boolean {
+    if (!aim) return false;
+    const dir = directionTo(caster.position, aim);
+    if (dir.x === 0 && dir.z === 0) return false;
+    caster.transform.rotationY = yawFromDirection(dir);
+
+    const maxDist = Math.min(def.range, distance2D(caster.position, aim));
+    const steps = 10;
+    let traveled = 0;
+
+    for (let i = 0; i < steps; i += 1) {
+      const step = maxDist / steps;
+      const next = {
+        x: caster.position.x + dir.x * step,
+        y: 0,
+        z: caster.position.z + dir.z * step,
+      };
+      if (isBlocked(caster.position, next)) break;
+      caster.setPosition(next.x, 0, next.z);
+      traveled += step;
+    }
+    return traveled > 0.2;
+  }
+
+  private castRainOfRunes(
+    def: AbilityDefinition,
+    caster: Hero,
+    aim: Vec3 | undefined,
+    entities: LivingEntity[],
+  ): boolean {
+    if (!aim) return false;
+    const radius = def.radius ?? 4;
+    for (const other of entities) {
+      if (!this.targeting.areEnemies(caster, other)) continue;
+      if (distance2D(aim, other.position) > radius + other.transform.radius) continue;
+      this.deal(caster, other, def);
     }
     return true;
   }

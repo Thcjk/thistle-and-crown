@@ -30,6 +30,7 @@ body,
   inset: 0;
   pointer-events: none;
   z-index: 2;
+  font-size: calc(16px * var(--ui-scale, 1));
 }
 
 #ui-root button,

@@ -276,6 +276,20 @@
   pointer-events: none;
 }
 
+.tutorial-banner {
+  position: absolute;
+  top: 3.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.35rem 0.85rem;
+  background: rgba(61, 107, 90, 0.85);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--parchment);
+  font-size: 0.88rem;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .pause-menu {
   position: absolute;
   inset: 0;

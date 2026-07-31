@@ -86,6 +86,7 @@ export class MobaCamera {
     pointerY: number,
     canvasW: number,
     canvasH: number,
+    speedMultiplier = 1,
   ): void {
     if (this.follow) return;
     const m = CAMERA_EDGE_MARGIN_PX;
@@ -106,7 +107,7 @@ export class MobaCamera {
     if (!center || !edged) return;
     const len = Math.hypot(edged.x - center.x, edged.z - center.z);
     if (len < 1e-4) return;
-    const speed = CAMERA_EDGE_PAN_SPEED * dt;
+    const speed = CAMERA_EDGE_PAN_SPEED * dt * speedMultiplier;
     const next = this.bounds.clamp(
       this.targetX + ((edged.x - center.x) / len) * speed,
       this.targetZ + ((edged.z - center.z) / len) * speed,

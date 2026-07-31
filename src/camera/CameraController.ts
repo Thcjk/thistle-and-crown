@@ -1,6 +1,7 @@
 import type { MobaCamera } from "./MobaCamera";
 import type { InputFrame } from "@/engine/InputManager";
 import type { Scene } from "@babylonjs/core";
+import { settingsManager } from "@/engine/SettingsManager";
 
 export class CameraController {
   constructor(private readonly camera: MobaCamera) {}
@@ -13,12 +14,12 @@ export class CameraController {
     cameraLocked: boolean,
     renderDt: number,
   ): void {
+    const settings = settingsManager.get();
     const spaceFollow = input.centerCameraHeld;
     const tracking = cameraLocked || spaceFollow;
     this.camera.setFollow(tracking);
 
     if (input.centerCamera && !spaceFollow) {
-      // Single tap Space (edge case): nudge camera to champion without locking.
       this.camera.centerOn(playerX, playerZ);
     }
 
@@ -36,7 +37,7 @@ export class CameraController {
       );
     }
 
-    if (!tracking) {
+    if (!tracking && settings.edgeScrolling) {
       this.camera.edgePan(
         scene,
         renderDt,
@@ -44,6 +45,7 @@ export class CameraController {
         input.pointerScreenY,
         input.canvasWidth,
         input.canvasHeight,
+        settings.cameraSpeed,
       );
     }
   }

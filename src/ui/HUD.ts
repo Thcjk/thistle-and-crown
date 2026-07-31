@@ -1,6 +1,7 @@
 import type { MatchManager } from "@/match/MatchManager";
 import type { DebugSnapshot } from "@/engine/DebugManager";
 import { getXpRequired } from "@/data/balance/progression";
+import { getHeroDefinition } from "@/data/heroes";
 import { AbilityBar } from "./AbilityBar";
 import { Minimap } from "./Minimap";
 import { Scoreboard } from "./Scoreboard";
@@ -20,6 +21,9 @@ export class HUD {
   private showPause = false;
   private showHelp = false;
   private helpSeen = false;
+  private tutorialMode = false;
+  private tutorialTipIndex = 0;
+  private tutorialTipTimer = 0;
   private toastTimer = 0;
   private toastEl: HTMLElement | null = null;
 
@@ -31,10 +35,15 @@ export class HUD {
       onUpgrade: (abilityId: string) => void;
       onResume: () => void;
       onExit: () => void;
+      onSettings?: () => void;
       onMinimapPan?: (x: number, z: number) => void;
+      tutorialMode?: boolean;
     },
   ): void {
     this.unmount();
+    this.tutorialMode = handlers.tutorialMode ?? false;
+    this.tutorialTipIndex = 0;
+    this.tutorialTipTimer = 0;
     this.root = document.createElement("div");
     this.root.className = "hud-root";
     this.root.innerHTML = `
@@ -73,12 +82,13 @@ export class HUD {
       <div data-world-bars></div>
       <div data-damage></div>
       <div class="toast hidden" data-toast></div>
+      <div class="tutorial-banner hidden" data-tutorial-banner></div>
       <div class="control-hint">RMB bewegen · Mausrand/MMB Kamera · Y Lock · Space folgen · H Hilfe</div>
       <button class="help-fab interactive" type="button" data-help-open title="Hilfe (H)">?</button>
       <div class="help-overlay hidden" data-help>
         <div class="help-panel interactive">
           <h2>So spielst du</h2>
-          <p class="help-lead">Du steuerst <strong>Brenna Stonehand</strong> (Highland). Zerstöre den gegnerischen <strong>Kern</strong> in der Basis der Iron Crown.</p>
+          <p class="help-lead" data-help-lead>Du steuerst deinen Helden (Highland). Zerstöre den gegnerischen <strong>Kern</strong> in der Basis der Iron Crown.</p>
           <div class="help-grid">
             <section>
               <h3>Ziel</h3>
@@ -121,6 +131,7 @@ export class HUD {
           <button class="menu-btn" data-resume>Resume</button>
           <button class="menu-btn secondary" data-exit>Exit to Menu</button>
           <button class="menu-btn secondary" type="button" data-help-from-pause>Hilfe</button>
+          <button class="menu-btn secondary" type="button" data-settings-from-pause>Einstellungen</button>
         </div>
       </div>
     `;
@@ -145,7 +156,28 @@ export class HUD {
     this.root.querySelector("[data-help-open]")?.addEventListener("click", () => this.setHelp(true));
     this.root.querySelector("[data-help-close]")?.addEventListener("click", () => this.setHelp(false));
     this.root.querySelector("[data-help-from-pause]")?.addEventListener("click", () => this.setHelp(true));
+    this.root.querySelector("[data-settings-from-pause]")?.addEventListener("click", () => {
+      handlers.onSettings?.();
+    });
 
+    const player = match.player;
+    if (player) {
+      const heroDef = getHeroDefinition(player.definitionId);
+      const lead = this.root.querySelector("[data-help-lead]");
+      if (lead && heroDef) {
+        lead.innerHTML = `Du steuerst <strong>${heroDef.displayName}</strong> (Highland). Zerstöre den gegnerischen <strong>Kern</strong> in der Basis der Iron Crown.`;
+      }
+      const portrait = this.root.querySelector("[data-portrait]");
+      if (portrait && heroDef) {
+        portrait.textContent = heroDef.displayName.charAt(0);
+        (portrait as HTMLElement).style.background = heroDef.portraitColor ?? "#3d6b5a";
+      }
+    }
+
+    if (this.tutorialMode) {
+      this.root.querySelector("[data-tutorial-banner]")?.classList.remove("hidden");
+      this.updateTutorialBanner();
+    }
     this.toastEl = this.root.querySelector("[data-toast]");
     host.appendChild(this.root);
 
@@ -205,6 +237,21 @@ export class HUD {
     this.toastEl.textContent = message;
     this.toastEl.classList.remove("hidden");
     this.toastTimer = 2.5;
+  }
+
+  private static readonly TUTORIAL_TIPS = [
+    "Rechtsklick: bewegen oder angreifen",
+    "A + Linksklick: Attack-Move für Last Hits",
+    "B in der Basis: Recall und einkaufen",
+    "Jungle-Camps und Objectives geben Buffs",
+    "Bushes verbergen dich vor Gegnern",
+  ];
+
+  private updateTutorialBanner(): void {
+    const banner = this.root?.querySelector("[data-tutorial-banner]");
+    if (!banner) return;
+    const tip = HUD.TUTORIAL_TIPS[this.tutorialTipIndex % HUD.TUTORIAL_TIPS.length]!;
+    banner.textContent = `Tutorial · ${tip}`;
   }
 
   update(
@@ -275,6 +322,15 @@ export class HUD {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.toastEl?.classList.add("hidden");
+    }
+
+    if (this.tutorialMode) {
+      this.tutorialTipTimer += dt;
+      if (this.tutorialTipTimer >= 12) {
+        this.tutorialTipTimer = 0;
+        this.tutorialTipIndex += 1;
+        this.updateTutorialBanner();
+      }
     }
 
     const debugEl = this.root.querySelector("[data-debug]");

@@ -14,10 +14,12 @@ import { EntityFactory } from "@/entities/core/EntityFactory";
 import { MobaCamera } from "@/camera/MobaCamera";
 import { CameraController } from "@/camera/CameraController";
 import { HUD } from "@/ui/HUD";
+import { SettingsPanel } from "@/ui/SettingsPanel";
 import type { EventBus } from "@/engine/EventBus";
 import type { InputManager } from "@/engine/InputManager";
 import type { DebugManager } from "@/engine/DebugManager";
 import { getAbilityDefinition } from "@/data/abilities";
+import { settingsManager } from "@/engine/SettingsManager";
 import { logger } from "@/utils/logger";
 
 interface MatchSceneDeps {
@@ -40,6 +42,7 @@ export class MatchScene implements GameScene {
   private moveMarker: Mesh | null = null;
   private shadows: ShadowGenerator | null = null;
   private hud = new HUD();
+  private settingsPanel = new SettingsPanel();
   private ended = false;
   private paused = false;
   private unsubscribers: Array<() => void> = [];
@@ -58,6 +61,7 @@ export class MatchScene implements GameScene {
 
     this.scene = new Scene(context.engine);
     this.match = new MatchManager(this.deps.eventBus, config);
+    this.match.cameraLocked = settingsManager.get().cameraLockDefault;
     this.shadows = new WorldBuilder().build(this.scene, this.match.map);
     this.camera = new MobaCamera(this.scene, this.match.map);
     this.cameraController = new CameraController(this.camera);
@@ -141,6 +145,10 @@ export class MatchScene implements GameScene {
         this.camera?.panToward(x, z);
         if (this.match) this.match.cameraLocked = false;
       },
+      onSettings: () => {
+        this.settingsPanel.mount(context.uiRoot, { onClose: () => {} });
+      },
+      tutorialMode: config.tutorialMode,
     });
 
     this.unsubscribers.push(
@@ -286,6 +294,7 @@ export class MatchScene implements GameScene {
       this.decalTimer = null;
     }
     this.hud.unmount();
+    this.settingsPanel.unmount();
     this.match?.dispose();
     this.match = null;
     for (const mesh of this.meshes.values()) {
