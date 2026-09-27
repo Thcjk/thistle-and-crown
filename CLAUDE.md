@@ -22,7 +22,8 @@ Code lesbar und kommentiert, nicht maximal clever. Kommentare ebenfalls auf Deut
 ## Aktueller Stand
 
 > **Stand 2026-09-26 spätabends: Version 2.5.0 – Rucksack hält an,
-> Werkbank zuhause, Lebensbalken, Treffer-Feedback.** Auf dem Branch; siehe
+> Werkbank zuhause, Lebensbalken, Treffer-Feedback.** Auf Wunsch („ja“ auf
+> die Frage nach dem Mergen) auf dem Branch und auf `main`. Siehe
 > **„Rückmeldung zu 2.4“** direkt unten.
 >
 > **Stand 2026-09-26 abends: Version 2.4.0 – Spielstände, Items neu,
